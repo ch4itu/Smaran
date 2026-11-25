@@ -1,9 +1,9 @@
 # Ludo Freeflow
 
-Four colours on one board, and no turns: every player rolls and moves whenever their own die is played.
+Four colours on one board, and no turns: every player rolls and moves whenever their own die is played. The page opens with a choice: play with bots, or play online.
 
 - **Local preview** (no sign-in): you are red, three bots play the other colours, dice come from the browser. Fully offline. The bots roll on their own, about once every two seconds each, whether you roll or not. Pause stops them.
-- **Online match** (sign in with Smaran): two to four people, one colour each. Every die comes from MagicBlock VRF and is applied on chain before the page shows it. Nobody needs SOL, a wallet or a seed phrase.
+- **Online match** (sign in with Smaran): two to four people, one colour each. A match starts 30 seconds after a second player joins. Every die comes from MagicBlock VRF and is applied on chain before the page shows it, and every finished match goes on a leaderboard. The board is turned so your colour sits at the bottom left. Nobody needs SOL, a wallet or a seed phrase.
 
 - **Capacity:** 8 tables of 4 seats, so 32 players online at once.
 
@@ -20,7 +20,7 @@ More on all the Smaran apps (four games and Smaran Streaks): [BLITZ.md](../BLITZ
 - **Tables on the public rollup.** The 8 tables are accounts created on Solana and delegated to MagicBlock's public rollup (devnet-as). Creating, joining, rolling and moving are rollup transactions that cost players nothing.
 - **Every die from VRF.** A roll asks MagicBlock VRF for randomness tied to that table, match, seat and action, and the die exists only once the VRF program's signed answer has been applied on chain (details below).
 - **No pop-ups while playing.** A seat belongs to a Smaran key, and a key made for the match signs its rolls and moves.
-- **Not saved to Solana.** Tables are reused match after match and stay on the rollup, so they pay for no saves.
+- **Not saved to Solana.** Tables are reused match after match and stay on the rollup, as does the leaderboard, so they pay for no saves. A rollup reset would clear the leaderboard.
 
 ## How an online match works
 
@@ -35,6 +35,7 @@ More on all the Smaran apps (four games and Smaran Streaks): [BLITZ.md](../BLITZ
 - **Seats belong to Smaran keys.** Create and Join are approved once with the player's Smaran key: here in Smaran's sign-in window, so the Smaran key never enters this page, or, in the [Smaran apps version](./), on the page itself after signing in there like the other Smaran apps. The approval names a *session key* that the page makes for the match, and that key signs every roll and move. "Continue here" on another device (one approval) gives the seat a new session key, and the old one stops working at once. A reloaded tab keeps playing with its session key.
 - **Rolls.** A roll asks MagicBlock VRF for randomness tied to the table, the match, the seat and the seat's action number. The die exists only once the VRF program's signed callback for exactly that request has been applied. A seat waiting for its die never blocks another seat. If no answer comes within 8 seconds, the seat may roll again: the new request replaces the old one, whose late answer is then refused.
 - **Fair dice.** The die is the first randomness byte below 252, mod 6, plus 1. Each face gets exactly 42 of those 252 byte values.
+- **A lost roll is sent again.** If a roll or move does not reach the rollup (a weak signal, a tab in the background), the page sends the same transaction again every 2 seconds. It can only count once. After 12 seconds the page says so and the player can roll again.
 - **No double actions.** Every roll and move carries the seat's next action number, so a retry, a replay or the same player on two devices can never apply an action twice. A move also names the token's current square: if a capture sent that token home first, the move is refused instead of becoming a different move.
 - **Same rules as the preview.** A six enters a token; a token walks 51 squares from its start square round to its column entrance, then its 5 column squares, then home, with the exact count. Landing alone on an opponent's single token off the stars and start squares sends it home. Two tokens of one colour block other colours, except on the stars and start squares, which every colour shares. A third six in a row is forfeited. The program's rules were compared with this page's own JavaScript over 400 random four-colour games (281,564 actions). They agree on every state.
 
