@@ -41,19 +41,21 @@ The whole map is made in the browser from one fixed seed when the page opens, in
 | Players | `["city-room", 0]`: 42 players shown to each other at once |
 | Chat | `["city-chat", 0]`: the last 24 lines |
 | Village signs | `["city-sign", 0]` to `["city-sign", 4]`: 160 sign places |
+| Village plans | `["city-plan", 0]` to `["city-plan", 4]`: 160 plan places, up to 30 changes each |
 
 ## Limits
 
 - 42 signed-in players are shown to each other at once. A 43rd can still walk around, but is shown to the others only after someone leaves.
 - Chat keeps the last 24 lines, and signs are short (56 characters).
 - 144 villages until the program upgrade above.
-- A keeper can change only the village's welcome sign. Houses, lanes, fields and names come from the map's seed.
-- Anyone can write to the sign accounts, and pages show only the keeper's line. When an account's 32 places are full, a new line replaces the oldest, so someone flooding them can push a keeper's sign out until the keeper saves it again.
+- A keeper can set the village's welcome sign and build: up to 30 changes within 12 tiles of the village centre, off the square and the paths. A change places one of 21 items (trees, flower beds, benches, lamps, a fountain, houses, an inn, a windmill and more) or clears what stands on a tile. Lanes, fields, names and everything outside the plot come from the map's seed.
+- When a village passes to a new keeper, it goes back to how the map made it, and the new keeper builds from there.
+- Residents keep the walks they were given by the map, so a new house can stand on one of their paths.
+- Anyone can write to the sign and plan accounts, and pages show only the keeper's sign and plan. When an account's 32 places are full, a new entry replaces the oldest, so someone flooding them can push out a keeper's sign or plan until the keeper saves it again.
 - The world follows the device's clock. A clock 10 seconds off runs that player's world an hour off and moves the residents several steps, and a clock about half a minute fast or more can hide other players.
 - Built on our earlier city-builder engine; the land, the villages and the plants are new for this world.
 
 ## Next (on the roadmap, not built)
 
-- **Village building.** A keeper builds in a plot 12 tiles around the village's centre. The map already keeps that ground dry and fairly level, and no two village centres are closer than 24 tiles, so plots never overlap.
 - **The rollup's clock.** SmaranWorld takes its time from the rollup, as EternalBliss already does, so a wrong device clock no longer matters.
 - **Past 144 villages,** after the small program upgrade above.

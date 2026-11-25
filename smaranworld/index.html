@@ -3080,7 +3080,7 @@ function installSmaranWorld({ engine, global, toast, config, onCount, onTowns })
   global.smaranVillageMarks = () => towns.filter((t) => t.spot).map((t) => ({ x: t.spot.x + 1, y: t.spot.y + 1, kept: !!t.relic, square: false }));
   const townsOf = (key) => towns.filter((t) => key && keeperOf(t) === key);
   let ledgerRead = false;
-  function applyLedger(relics) {
+  let applyLedger = function (relics) {
     const order = relics.slice().sort((a, b) => (Number(a.mintedAt) - Number(b.mintedAt)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const best = towns.map(() => null);
     order.forEach((r, n) => {
@@ -3095,7 +3095,7 @@ function installSmaranWorld({ engine, global, toast, config, onCount, onTowns })
     ledgerRead = true;
     applySigns();
     onTowns?.();
-  }
+  };
   Promise.resolve(global.smaranRelics).then(({ createRelicReader }) => {
     const read = createRelicReader({ programId: config.programId, rpcUrl: config.rpcUrl });
     const tick = () => read().then((d) => applyLedger(d.relics || [])).catch(() => {});
@@ -3431,6 +3431,219 @@ function installSmaranWorld({ engine, global, toast, config, onCount, onTowns })
     t.sign = clean(text, 56) || null;
     setTimeout(pollSigns, 1500);
   }
+
+  // ---------------------------------------------------------------- village building
+  // A keeper may change their village within 12 tiles of its centre: place up to 30 items or clear what stands on a
+  // tile. The changes live in five "plan" accounts of the same program (village v uses v % 5), written with the
+  // keeper's own Smaran key at no cost. As with signs, anyone may write there, and every page applies a village's plan
+  // only when its writer is the village's current keeper. Each page applies the same plan to the same map, so every
+  // player sees the same village. When the village changes hands, the new keeper starts from the village as it was made.
+  const PLAN_ACCOUNTS = [0, 1, 2, 3, 4].map((i) => W.PublicKey.findProgramAddressSync([enc.encode("city-plan"), Uint8Array.of(i)], PROGRAM)[0]);
+  const PLAN_MAX = 30, PLOT = 12;
+  // item n (1-based) is ITEMS[n - 1]; plans on Solana hold these numbers, so the list only ever grows at the end
+  const ITEMS = ["tree", "pine", "bush", "planter", "bench", "lamp", "pots", "market", "wall", "kiosk", "haybale", "fountain",
+    "house", "townhouse", "cafe", "bakery", "inn", "library", "farmhouse", "windmill", "temple"];
+  const NO_BUILD = new Set(["path", "plaza", "road", "dirt", "bridge", "water", "sea", "rock", "ice"]);
+  const planParts = PLAN_ACCOUNTS.map(() => []);
+  let planRows = [], build = null;
+  function parsePlans(d, part = 0) {
+    if (d.length < HEADER + SIGN_N * SIGN || dec.decode(d.subarray(0, 8)) !== "SMPLAN01") return;
+    const v = new DataView(d.buffer, d.byteOffset, d.byteLength), rows = [];
+    for (let i = 0; i < SIGN_N; i++) {
+      const o = HEADER + i * SIGN, ts = v.getUint32(o + 32, true);
+      if (!ts) continue;
+      const n = Math.min(PLAN_MAX, d[o + 37]), edits = [];
+      for (let k = 0; k < n; k++) edits.push({ dx: d[o + 38 + k * 3] - PLOT, dy: d[o + 39 + k * 3] - PLOT, item: d[o + 40 + k * 3] });
+      rows.push({ key: new W.PublicKey(d.subarray(o, o + 32)).toBase58(), ts, town: d[o + 36], edits });
+    }
+    planParts[part] = rows;
+    planRows = planParts.flat();
+    applyPlans();
+  }
+  const inPlot = (t, x, y) => Math.hypot(x + 0.5 - t.cx, y + 0.5 - t.cy) <= PLOT && !(Math.abs(x - t.cx) <= 2 && Math.abs(y - t.cy) <= 2) && !reserved.has(x + "," + y);
+  const covers = (o, x, y) => { const a = engine.asset(o.asset); return !!a && x >= o.x && y >= o.y && x < o.x + (a.w || 1) && y < o.y + (a.h || 1); };
+  function objectsAt(x, y) {
+    const out = [];
+    for (let by = Math.floor((y - 3) / 16); by <= Math.floor(y / 16); by++) for (let bx = Math.floor((x - 3) / 16); bx <= Math.floor(x / 16); bx++)
+      for (const o of engine.spatial.get(bx + "," + by) || []) if (covers(o, x, y)) out.push(o);
+    return out;
+  }
+  function addObject(o) {
+    const a = engine.asset(o.asset);
+    engine.city.objects.push(o);
+    const key = Math.floor(o.x / 16) + "," + Math.floor(o.y / 16);
+    if (!engine.spatial.has(key)) engine.spatial.set(key, []);
+    engine.spatial.get(key).push(o);
+    if (a?.solid) for (let dy = 0; dy < a.h; dy++) for (let dx = 0; dx < a.w; dx++) engine.blocked.add((o.x + dx) + "," + (o.y + dy));
+    engine.revision++;
+  }
+  function removeObject(o) {
+    const a = engine.asset(o.asset), i = engine.city.objects.indexOf(o);
+    if (i < 0) return;
+    engine.city.objects.splice(i, 1);
+    const list = engine.spatial.get(Math.floor(o.x / 16) + "," + Math.floor(o.y / 16));
+    if (list && list.includes(o)) list.splice(list.indexOf(o), 1);
+    if (a?.solid) for (let dy = 0; dy < a.h; dy++) for (let dx = 0; dx < a.w; dx++) engine.blocked.delete((o.x + dx) + "," + (o.y + dy));
+    engine.revision++;
+  }
+  function revert(t) {
+    if (!t.built) return;
+    for (const o of t.built.added) removeObject(o);
+    for (const o of t.built.removed) addObject(o);
+    t.built = null;
+  }
+  // Applies edits in order: a clear removes what covers that tile; an item stands where its whole footprint is inside
+  // the plot, on open ground and free. Returns which edits took effect.
+  function applyPlan(t, edits) {
+    revert(t);
+    const built = { added: [], removed: [] }, used = [];
+    for (const e of edits) {
+      const x = Math.round(t.cx) + e.dx, y = Math.round(t.cy) + e.dy;
+      if (e.item === 0) {
+        const hit = inPlot(t, x, y) ? objectsAt(x, y).filter((o) => o.asset !== TOWN_ASSET && !built.added.includes(o)) : [];
+        for (const o of hit) { removeObject(o); built.removed.push(o); }
+        used.push(hit.length > 0);
+        continue;
+      }
+      const a = engine.asset(ITEMS[e.item - 1]);
+      let ok = !!a;
+      for (let dy = 0; ok && dy < (a.h || 1); dy++) for (let dx = 0; ok && dx < (a.w || 1); dx++) {
+        const X = x + dx, Y = y + dy, ground = engine.terrain(X, Y);
+        if (!inPlot(t, X, Y) || ground === null || NO_BUILD.has(ground) || engine.blocked.has(X + "," + Y) || objectsAt(X, Y).length) ok = false;
+      }
+      if (ok) {
+        const o = { id: nextObjectId++, asset: a.id, x, y, rot: 0, label: t.name + " " + a.name.toLowerCase() };
+        addObject(o);
+        built.added.push(o);
+      }
+      used.push(ok);
+    }
+    t.built = built;
+    return used;
+  }
+  function applyPlans() {
+    for (const t of towns) {
+      if (build && build.t === t) continue; // the keeper's unsaved changes stay on screen while building
+      const k = keeperOf(t);
+      const row = k ? planRows.filter((r) => r.town === t.i && r.key === k).sort((a, b) => b.ts - a.ts)[0] : null;
+      const id = row ? k + ":" + row.ts : "";
+      if (id === (t.planId || "")) continue;
+      t.planId = id;
+      t.plan = row ? row.edits : [];
+      applyPlan(t, t.plan);
+    }
+  }
+  const pollPlans = () => conn.getMultipleAccountsInfo(PLAN_ACCOUNTS).then((list) => list.forEach((a, i) => a && parsePlans(bytesOf(a), i))).catch(() => {});
+  PLAN_ACCOUNTS.forEach((a, i) => conn.onAccountChange(a, (acc) => parsePlans(bytesOf(acc), i), "confirmed"));
+  pollPlans();
+  setInterval(pollPlans, 10000);
+  const applyLedger0 = applyLedger;
+  applyLedger = (relics) => { applyLedger0(relics); applyPlans(); };
+
+  // building mode: a bar at the bottom, taps on the map place or clear, the plot's edge drawn on the ground
+  const bar = global.document.createElement("div");
+  bar.hidden = true;
+  bar.setAttribute("aria-label", "Village building");
+  bar.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:max(8px,env(safe-area-inset-bottom));z-index:40;width:min(560px,calc(100vw - 16px));background:var(--px-paper,#fcf8ec);border:3px solid var(--px-ink,#1e1e1e);padding:8px;display:grid;gap:6px;font:18px/1.2 VT323,ui-monospace,monospace";
+  bar.innerHTML = '<b data-title></b><div data-items style="display:flex;gap:4px;overflow-x:auto;padding-bottom:2px"></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" data-remove>Clear a tile</button><button type="button" data-undo>Undo</button><button type="button" data-save>Save</button><button type="button" data-cancel>Cancel</button></div><span data-note role="status"></span>';
+  global.document.body.append(bar);
+  const q = (k) => bar.querySelector("[data-" + k + "]");
+  ITEMS.forEach((id, n) => {
+    const a = engine.asset(id);
+    if (!a) return;
+    const b = global.document.createElement("button");
+    b.type = "button"; b.textContent = a.name; b.dataset.item = n + 1; b.style.cssText = "flex:none;min-height:36px;padding:4px 8px";
+    b.onclick = () => { build.item = n + 1; drawBar(); };
+    q("items").append(b);
+  });
+  function drawBar(note) {
+    if (!build) return;
+    q("title").textContent = "Building " + build.t.name + " \u00B7 " + build.edits.length + " of " + PLAN_MAX + " changes";
+    for (const b of q("items").children) b.setAttribute("aria-pressed", String(Number(b.dataset.item) === build.item));
+    q("remove").setAttribute("aria-pressed", String(build.item === 0));
+    if (note !== undefined) q("note").textContent = note;
+  }
+  q("remove").onclick = () => { build.item = 0; drawBar("Tap something in the plot to clear it."); };
+  q("undo").onclick = () => { if (build.edits.length) { build.edits.pop(); applyPlan(build.t, build.edits); drawBar(""); } };
+  q("cancel").onclick = () => stopBuild(false);
+  q("save").onclick = async () => {
+    const b = build;
+    if (!b || !me) return;
+    q("save").disabled = true; drawBar("Saving\u2026");
+    try {
+      const d = new Uint8Array(4 + b.edits.length * 3);
+      d[0] = 6; d[1] = b.t.i % 5; d[2] = b.t.i; d[3] = b.edits.length;
+      b.edits.forEach((e, k) => { d[4 + k * 3] = e.dx + PLOT; d[5 + k * 3] = e.dy + PLOT; d[6 + k * 3] = e.item; });
+      const sig = await send(me, PLAN_ACCOUNTS[b.t.i % 5], d);
+      let done = false;
+      for (let k = 0; k < 60 && !done; k++) {
+        const st = (await conn.getSignatureStatuses([sig])).value[0];
+        if (st?.err) throw new Error("The rollup refused the plan.");
+        if (st?.confirmationStatus) done = true; else await new Promise((r) => setTimeout(r, 250));
+      }
+      if (!done) throw new Error("The plan did not reach the rollup. Try Save again.");
+      b.t.planId = null;
+      stopBuild(true);
+      toast?.("Saved. Every player now sees " + b.t.name + " as you built it.");
+      setTimeout(pollPlans, 1200);
+    } catch (error) { drawBar(error instanceof Error ? error.message : "Could not save."); }
+    finally { q("save").disabled = false; }
+  };
+  function startBuild(i) {
+    const t = towns[i];
+    if (!me) throw new Error("Sign in first.");
+    if (!t || keeperOf(t) !== me.publicKey) throw new Error("Only the keeper of " + (t?.name || "that village") + " can build there.");
+    build = { t, edits: (t.plan || []).slice(), item: 1 };
+    applyPlan(t, build.edits);
+    bar.hidden = false;
+    engine.follow = false;
+    engine.zoom = 0.9; // the whole plot is about 25 tiles across: near enough to tap, far enough to see
+    engine.focus(t.cx, t.cy);
+    drawBar("Tap the ground near the square to place. Tap a change again to take it back. Drag to look around.");
+  }
+  function stopBuild(saved) {
+    const t = build?.t;
+    build = null;
+    bar.hidden = true;
+    if (t && !saved) { t.planId = null; applyPlans(); }
+  }
+  // a tap on the map: while building it places or clears instead of walking
+  const moveTo0 = engine.moveTo.bind(engine);
+  engine.moveTo = (x, y) => {
+    if (!build) return moveTo0(x, y);
+    const t = build.t, X = Math.floor(x), Y = Math.floor(y), dx = X - Math.round(t.cx), dy = Y - Math.round(t.cy);
+    if (!inPlot(t, X, Y)) { drawBar("That is outside " + t.name + "'s plot: 12 tiles round the square, not on the square itself."); return true; }
+    const at = build.edits.findIndex((e) => e.item ? (() => { const a = engine.asset(ITEMS[e.item - 1]); return a && X >= Math.round(t.cx) + e.dx && Y >= Math.round(t.cy) + e.dy && X < Math.round(t.cx) + e.dx + (a.w || 1) && Y < Math.round(t.cy) + e.dy + (a.h || 1); })() : e.dx === dx && e.dy === dy);
+    if (at >= 0) { build.edits.splice(at, 1); applyPlan(t, build.edits); drawBar("Taken back."); return true; }
+    if (build.edits.length >= PLAN_MAX) { drawBar("That is all " + PLAN_MAX + " changes. Undo one, or Save."); return true; }
+    build.edits.push({ dx, dy, item: build.item });
+    const used = applyPlan(t, build.edits);
+    if (!used[used.length - 1]) { build.edits.pop(); applyPlan(t, build.edits); drawBar(build.item ? "That does not fit there: it needs open ground, off the paths, inside the plot." : "Nothing to clear there."); return true; }
+    drawBar(build.item ? "Placed." : "Cleared.");
+    return true;
+  };
+  const update1 = engine.update;
+  engine.update = (dt) => { if (build) engine.follow = false; update1(dt); if (build) engine.follow = false; };
+  const draw1 = engine.draw;
+  engine.draw = () => {
+    draw1();
+    if (!build || !engine.art?.readyFlag) return;
+    const t = build.t, ctx = engine.ctx, c = Math.round(t.cx), cy = Math.round(t.cy);
+    ctx.save();
+    ctx.strokeStyle = "#b8302b"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let y = cy - PLOT - 1; y <= cy + PLOT; y++) for (let x = c - PLOT - 1; x <= c + PLOT; x++) {
+      if (!inPlot(t, x, y)) continue;
+      const edge = (ax, ay, bx, by) => { const p = engine.screen(ax, ay), q2 = engine.screen(bx, by); ctx.moveTo(p.x, p.y); ctx.lineTo(q2.x, q2.y); };
+      if (!inPlot(t, x, y - 1)) edge(x, y, x + 1, y);
+      if (!inPlot(t, x + 1, y)) edge(x + 1, y, x + 1, y + 1);
+      if (!inPlot(t, x, y + 1)) edge(x, y + 1, x + 1, y + 1);
+      if (!inPlot(t, x - 1, y)) edge(x, y, x, y + 1);
+    }
+    ctx.stroke();
+    ctx.restore();
+  };
+
   return {
     join(player) { me = player; last = null; remotes.delete(player.publicKey); onTowns?.(); },
     leave() {
@@ -3444,6 +3657,7 @@ function installSmaranWorld({ engine, global, toast, config, onCount, onTowns })
     townsOf,
     say,
     setSign,
+    startBuild,
     nameOf: (key) => nameOf(key) || short(key),
   };
 }
@@ -3531,7 +3745,11 @@ function installCityIdentity({ engine, config, doc, global, toast }) {
           finally { save.disabled = false; }
         };
         label.append(input);
-        box.append(label, save, note);
+        const buildBtn = node("button", "Build in " + t.name, "margin-top:8px");
+        buildBtn.type = "button";
+        buildBtn.onclick = () => { try { townDialog.close(); world.startBuild(t.i); } catch (error) { note.textContent = error instanceof Error ? error.message : "Could not start."; } };
+        const buildNote = node("p", "Place trees, flowers, benches, houses and more, or clear what stands, within 12 tiles of the square. Up to 30 changes. Everyone sees them.", "margin:6px 0 0;font-size:19px");
+        box.append(label, save, note, buildBtn, buildNote);
         townBody.append(box);
       }
     } else {
