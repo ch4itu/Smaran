@@ -222,21 +222,31 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
 
   // One transaction. With `smaran`, the player's Smaran key pays (0 SOL: the rollup charges nothing) and signs in
   // Smaran's window; otherwise the session key signs. Errors carry the program's code.
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function b58(bytes) { let n = 0n; for (const b of bytes) n = n * 256n + BigInt(b); let out = ''; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; } for (const b of bytes) { if (b) break; out = '1' + out; } return out; }
   async function send(ixs, { smaran = false } = {}) {
     const tx = new W.Transaction().add(...ixs);
     tx.feePayer = smaran ? new W.PublicKey(O.player.publicKey) : O.session.publicKey;
     tx.recentBlockhash = (await conn.getLatestBlockhash('confirmed')).blockhash;
     if (smaran) await O.player.signTransaction(tx); else tx.sign(O.session);
-    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-    for (let n = 0; n < 100; n++) {
-      const st = (await conn.getSignatureStatuses([sig])).value[0];
+    const raw = tx.serialize();
+    const sig = b58(tx.signature); // the transaction's own id, known before sending
+    await conn.sendRawTransaction(raw, { skipPreflight: true }).catch(() => {}); // a failed send is retried below
+    // A transaction can be dropped on the way (a weak phone signal, a tab in the background). Send the same one
+    // again every 2 seconds while waiting (it can only land once), and give up after 12 seconds so the player can
+    // simply roll again instead of watching "Rolling…" for a minute.
+    const end = Date.now() + 12000;
+    let sentAt = Date.now();
+    while (Date.now() < end) {
+      const st = (await conn.getSignatureStatuses([sig]).catch(() => ({ value: [null] }))).value[0];
       if (st) {
         if (st.err) { const c = st.err?.InstructionError?.[1]?.Custom; const e = new Error(ERR[c] || 'The rollup refused it (' + JSON.stringify(st.err) + ').'); e.code = c; e.sig = sig; throw e; }
         if (st.confirmationStatus) return sig;
       }
-      await sleep(100);
+      if (Date.now() - sentAt > 2000) { sentAt = Date.now(); conn.sendRawTransaction(raw, { skipPreflight: true }).catch(() => {}); }
+      await sleep(150);
     }
-    throw new Error('The rollup did not confirm in time.');
+    throw new Error('That did not reach the rollup. Try again.');
   }
 
   // ---------------------------------------------------------------- state
