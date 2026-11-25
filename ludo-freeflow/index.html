@@ -59,6 +59,13 @@
 .lobby .lobby-actions button{min-height:36px;padding:6px 9px!important;font-size:8px!important}
 .lobby b{font-weight:700}
 @media (max-width:550px) and (orientation:portrait){#online{order:2}}
+  /* the message above the board always takes two lines, so rolling never moves the board */
+  #hint { min-height: 32px; min-height: 2lh; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lf-rules { margin: 6px 0 8px; padding: 8px 10px; border: 3px solid var(--px-ink, #222); background: var(--px-paper, #fff8e7); color: var(--px-ink, #222); font-size: 13px; line-height: 1.4; }
+  .lf-rules b { display: block; margin-bottom: 2px; }
+  #olBoard { margin-top: 8px; }
+  #olBoard ol { margin: 4px 0 0; padding-left: 22px; }
+  #olBoard li { margin: 2px 0; }
 </style>
 </head><body><main>
 <h1>Ludo <span>Freeflow</span></h1><p>Four players. One board. Zero waiting.</p>
@@ -66,7 +73,7 @@
 
 <section class="hud" role="status" aria-live="polite"><div><div class="hud-label" id="hudLabel">YOU · RED TEAM</div><div id="hint" class="hud-message">Roll the dice to begin</div></div><div id="dieFace" class="hud-die" aria-label="Latest dice roll"><span class="die-pips p5" id="diePips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div></section><canvas id="board" width="750" height="750" aria-label="Ludo board, tap a highlighted token to move"></canvas>
 <div class="control-deck"><div class="control-caption"><span>◈ FREEFLOW CONTROL DECK</span><span id="rollLabel">READY TO ROLL</span></div><nav><button id="roll" aria-label="Roll the dice">ROLL THE DICE <span class="roll-cube" aria-hidden="true">⚄</span></button><button id="pause" title="Pause game" aria-label="Pause game">Ⅱ</button><button id="reset" title="Restart game" aria-label="Restart game">↻</button></nav><div class="control-help" id="controlHelp">Roll, then tap a glowing red token to move it.</div></div><div id="cinema" class="cinema" aria-live="polite" aria-atomic="true"><div class="cinema-flare"></div><div id="cinemaText" class="cinema-text"></div><div id="cinemaSub" class="cinema-sub"></div></div>
-<div id="scores" class="scores"></div><div id="log"></div><section id="online" class="online" aria-label="Online tables"><h2 id="olTitle">Online tables</h2><p class="online-sub" id="olSub">8 tables of 4 players. Sign in to create or join a match. Anyone can watch.</p><div class="online-row" id="onlineIdle"><button id="olCreate" type="button">Create online match</button><input id="olCode" placeholder="Code, e.g. 3-12" aria-label="Match code" autocomplete="off"><button id="olJoin" type="button">Join</button></div><div id="olLobbies" class="online-lobbies"><div class="lobby"><span>Reading the tables…</span></div></div><div class="online-row" id="onlineMatch" hidden><span id="olInfo"></span><button id="olStart" type="button" hidden>Start</button><button id="olShare" type="button" hidden>Copy invite link</button><button id="olLeave" type="button">Leave match</button></div><div id="olMsg" class="online-msg" role="status" aria-live="polite"></div></section><p class="footer-note"><strong>How to play:</strong> No turns: roll whenever your die is played · Roll 6 to enter · Exact roll to finish · Stars and start squares are safe and shared · Two same-colour tokens block other colours, except on those squares · A six or a capture earns a bonus roll · Three sixes in a row forfeit the third · In the preview the bots roll on their own, about once every two seconds, whether you roll or not · Tap a glowing token.</p>
+<div id="scores" class="scores"></div><div id="log"></div><section id="online" class="online" aria-label="Online tables"><h2 id="olTitle">Online tables</h2><p class="online-sub" id="olSub">8 tables of 4 players. Sign in to create or join a match. Anyone can watch.</p><div class="lf-rules" id="olRules"><b>How an online match starts</b>1. One player creates a match. Others join with its code or invite link.<br>2. When a second player joins, a 30-second clock starts. Anyone else who joins in those 30 seconds plays too.<br>3. After 30 seconds the match starts by itself with everyone seated: 2, 3 or 4 players. With 4 it starts at once.<br>4. Every finished match goes on the leaderboard: a win for the winner, a game for everyone.</div><div class="online-row" id="onlineIdle"><button id="olCreate" type="button">Create online match</button><input id="olCode" placeholder="Code, e.g. 3-12" aria-label="Match code" autocomplete="off"><button id="olJoin" type="button">Join</button></div><div id="olLobbies" class="online-lobbies"><div class="lobby"><span>Reading the tables…</span></div></div><div class="online-row" id="onlineMatch" hidden><span id="olInfo"></span><button id="olStart" type="button" hidden>Start</button><button id="olShare" type="button" hidden>Copy invite link</button><button id="olLeave" type="button">Leave match</button></div><div id="olMsg" class="online-msg" role="status" aria-live="polite"></div><div id="olBoard" aria-label="Leaderboard"></div></section><p class="footer-note"><strong>How to play:</strong> No turns: roll whenever your die is played · Roll 6 to enter · Exact roll to finish · Stars and start squares are safe and shared · Two same-colour tokens block other colours, except on those squares · A six or a capture earns a bonus roll · Three sixes in a row forfeit the third · In the preview the bots roll on their own, about once every two seconds, whether you roll or not · Tap a glowing token.</p>
 <p class="footer-note">Online: sign in with your username and password (no wallet, no seed phrase, no crypto). Every roll and move is checked by the game's program on Solana's test network, running on MagicBlock, so all four players see the same fair game. Your seat is tied to your account; for each match this page makes a short-lived key that plays your moves. The local preview works offline.</p><p class="footer-note"><a href="../">All Smaran apps</a></p>
 </main>
 <dialog id="lfSignin" class="px-panel">
@@ -148,7 +155,9 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
   const ERR = { 5: 'That is not possible right now.', 6: 'That seat is not yours.', 7: 'The board moved on. Try again.', 8: 'Your last roll is still being played.',
     14: 'That match has ended on this table.', 15: 'That move is not allowed.', 16: 'That token was moved (captured?) before your move arrived. Choose again.',
     17: 'The match is full.', 18: 'You already have a seat in this match.', 19: 'There is no die to play.', 20: 'At least two players are needed to start.',
-    21: 'That table is busy. Try another.', 23: 'That die was replaced by a newer roll.', 24: 'Only your own sign-in can do that.' };
+    21: 'That table is busy. Try another.', 23: 'That die was replaced by a newer roll.', 24: 'Only your own sign-in can do that.',
+    25: 'The 30 seconds are not over yet.', 26: 'This match is already on the leaderboard.', 27: 'The leaderboard could not be found.' };
+  const LOBBY_WAIT = 30;
   const enc = new TextEncoder(), dec = new TextDecoder();
   const conn = new W.Connection(ER, { commitment: 'confirmed', wsEndpoint: 'wss://devnet-as.magicblock.app' });
   const tableKey = i => W.PublicKey.findProgramAddressSync([enc.encode('lf-table'), Uint8Array.of(i)], PROGRAM)[0];
@@ -166,6 +175,7 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
     roll: (p, i, m, seat, seq) => ix([k(p, true, true), k(tableKey(i), false, true), k(IDENTITY, false, false), k(VRF, false, false), k(QUEUE, false, true), k(W.SystemProgram.programId, false, false), k(SLOT_HASHES, false, false)], cat(Uint8Array.of(5, i), u32(m), Uint8Array.of(seat), u32(seq))),
     move: (p, i, m, seat, seq, token, from) => ix([k(p, true, true), k(tableKey(i), false, true)], cat(Uint8Array.of(6, i), u32(m), Uint8Array.of(seat), u32(seq), Uint8Array.of(token, from))),
     leave: (p, i, m, seat) => ix([k(p, true, true), k(tableKey(i), false, true)], cat(Uint8Array.of(7, i), u32(m), Uint8Array.of(seat))),
+    record: (p, i, m) => ix([k(p, true, true), k(tableKey(i), false, true), k(tableKey(255), false, true)], cat(Uint8Array.of(10, i), u32(m))),
     rebind: (p, i, m, seat, s) => ix([k(p, true, true), k(tableKey(i), false, true)], cat(Uint8Array.of(9, i), u32(m), Uint8Array.of(seat), s.toBytes())),
   };
 
@@ -177,16 +187,32 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
       return { key: new W.PublicKey(d.slice(o, o + 32)).toBase58(), session: new W.PublicKey(d.slice(o + 32, o + 64)).toBase58(),
         name: dec.decode(d.slice(o + 65, o + 65 + Math.min(15, d[o + 64]))), pieces: [...d.slice(o + 80, o + 84)].map(x => (x === 255 ? -1 : x)),
         wait: d[o + 84], pending: d[o + 85], sixes: d[o + 86], bonus: d[o + 87], last: d[o + 88], captures: d[o + 89],
-        seated: !!(d[o + 90] & 1), left: !!(d[o + 90] & 2), seq: v.getUint32(o + 92, true), req: v.getUint32(o + 96, true), reqAt: v.getUint32(o + 100, true) };
+        seated: !!(d[o + 90] & 1), left: !!(d[o + 90] & 2), counted: !!(d[o + 90] & 4), seq: v.getUint32(o + 92, true), req: v.getUint32(o + 96, true), reqAt: v.getUint32(o + 100, true) };
     });
     const count = v.getUint32(32, true), ev = [];
     for (let n = Math.max(0, count - RING); n < count; n++) { const o = T_RING + (n % RING) * 8; ev.push({ n, k: d[o], seat: d[o + 1], a: d[o + 2], b: d[o + 3], c: d[o + 4], d: d[o + 5], e: d[o + 6], f: d[o + 7] }); }
     return { idx, phase: ['free', 'lobby', 'playing', 'finished'][d[9]] || 'free', winner: d[11] === 255 ? null : d[11], match: v.getUint32(12, true),
-      active: Number(v.getBigInt64(24, true)), count, seats, ev };
+      active: Number(v.getBigInt64(24, true)), lobbyAt: v.getUint32(36, true), count, seats, ev };
   }
   async function readAll() {
     const r = await conn.getMultipleAccountsInfo([...Array(NT).keys()].map(tableKey));
     return r.map((a, i) => (a ? parse(a.data, i) : null));
+  }
+  // the leaderboard: one account on the same rollup, rows of key, name, wins, games, captures, tokens home
+  async function readBoard() {
+    const a = await conn.getAccountInfo(tableKey(255));
+    if (!a || dec.decode(a.data.slice(0, 8)) !== 'LFBOARD1') return null;
+    const d = a.data, v = new DataView(d.buffer, d.byteOffset, d.byteLength), n = v.getUint16(8, true), rows = [];
+    for (let r = 0; r < n; r++) { const o = 16 + r * 56; rows.push({ key: new W.PublicKey(d.slice(o, o + 32)).toBase58(), name: dec.decode(d.slice(o + 33, o + 33 + Math.min(15, d[o + 32]))), wins: v.getUint16(o + 48, true), games: v.getUint16(o + 50, true), captures: v.getUint16(o + 52, true) }); }
+    return { matches: v.getUint32(12, true), rows: rows.sort((a, b) => b.wins - a.wins || a.games - b.games || b.captures - a.captures) };
+  }
+  async function showBoard() {
+    try {
+      const b = await readBoard();
+      if (!b) { $('olBoard').innerHTML = ''; return; }
+      const myKey = O.player && O.player.publicKey;
+      $('olBoard').innerHTML = '<b>Leaderboard</b> · ' + b.matches + ' online match' + (b.matches === 1 ? '' : 'es') + ' recorded' + (b.rows.length ? '<ol>' + b.rows.slice(0, 10).map(r => '<li' + (r.key === myKey ? ' style="font-weight:700"' : '') + '>' + esc(r.name || r.key.slice(0, 6)) + ' · ' + r.wins + ' win' + (r.wins === 1 ? '' : 's') + ' in ' + r.games + ' game' + (r.games === 1 ? '' : 's') + ' · ' + r.captures + ' captures</li>').join('') + '</ol>' : '<p>No matches yet. Win the first one.</p>');
+    } catch (e) { /* the board is optional */ }
   }
   async function readOne(i) { const r = await conn.getAccountInfoAndContext(tableKey(i)); const t = r.value ? parse(r.value.data, i) : null; if (t) t.slot = r.context.slot; return t; }
 
@@ -230,11 +256,13 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
     O.sub = conn.onAccountChange(tableKey(idx), (a, c) => { const t = parse(a.data, idx); if (t) { t.slot = c.slot; apply(t); } }, 'confirmed');
     clearInterval(O.timer);
     O.timer = setInterval(() => readOne(idx).then(t => t && apply(t)).catch(() => {}), 1500);
+    clearInterval(O.clock);
+    O.clock = setInterval(() => { if (O.t && O.t.phase === 'lobby') update(); }, 1000);
     readOne(idx).then(t => t && apply(t)).catch(e => say(e.message, true));
   }
   function leaveOnline(note) {
     if (O.sub !== null) conn.removeAccountChangeListener(O.sub).catch(() => {});
-    clearInterval(O.timer);
+    clearInterval(O.timer); clearInterval(O.clock);
     Object.assign(O, { idx: null, match: 0, seat: null, t: null, sub: null, timer: null, session: null, rollSeq: null });
     dropSession();
     online = null; me = 0; names = ['YOU', 'BLUE', 'GREEN', 'YELLOW'];
@@ -315,10 +343,14 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
       if (!t) { disabled = true; label = 'CONNECTING…'; }
       else if (t.phase === 'lobby') {
         const n = t.seats.filter(x => x.seated).length;
-        label = n >= 2 ? 'START MATCH' : 'WAITING FOR PLAYERS'; disabled = n < 2 || O.seat === null; caption = n + ' OF 4 SEATED';
-        help = 'Invite code ' + t.idx + '-' + t.match + '. Anyone seated can start once two or more have joined.';
+        const left = t.lobbyAt ? Math.max(0, Math.ceil(t.lobbyAt + LOBBY_WAIT - Date.now() / 1000)) : 0;
+        caption = n + ' OF 4 SEATED'; disabled = true;
+        if (n < 2) { label = 'WAITING FOR PLAYERS'; help = 'Invite code ' + t.idx + '-' + t.match + '. When one more player joins, the match starts 30 seconds later.'; }
+        else if (left > 0) { label = 'STARTS IN ' + left + ' S'; help = 'Code ' + t.idx + '-' + t.match + '. Others can still join for ' + left + ' seconds, then the match starts with everyone seated.'; }
+        else { label = 'STARTING…'; help = 'Starting with ' + n + ' players.'; autoStart(t); }
       } else if (t.phase === 'finished') {
         disabled = true; label = 'MATCH OVER'; caption = 'FINISHED';
+        autoRecord(t);
         help = t.winner === null ? 'The match is over.' : (t.winner === O.seat ? 'You won! ' : (t.seats[t.winner].name || TEAM[t.winner]) + ' won. ') + 'Leave to play again.';
       } else if (!s || s.left) { disabled = true; label = 'WATCHING'; help = 'You are watching this match.'; }
       else if (unanswered(s)) { O.rollSeq = null; label = 'ROLL AGAIN'; caption = 'NO ANSWER YET'; help = 'That die never arrived. Roll again: the new roll replaces the unanswered one.'; }
@@ -343,7 +375,7 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
     async roll() {
       const t = O.t, s = mine();
       if (!t || O.busy || O.seat === null) return;
-      if (t.phase === 'lobby') return act(() => send([I.start(O.session.publicKey, O.idx, O.match)]));
+      if (t.phase === 'lobby') return;
       if (t.phase !== 'playing' || !s || ((s.pending || O.rollSeq !== null) && !unanswered(s))) return;
       if (s.wait) {
         const opts = legalNow();
@@ -367,6 +399,21 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
       for (const i of legalNow()) { const [a, c] = displayCache[O.seat][i]; if (Math.hypot(x - a, y - c) < 35) return hooks.moveToken(i); }
     },
   };
+  // No server: when the 30 seconds are over, every seated page asks the program to start; the first one wins and
+  // the others get "not possible right now". Too early by the chain's clock: try again a moment later.
+  let starting = 0;
+  function autoStart(t) {
+    if (O.seat === null || !O.session || O.busy || Date.now() - starting < 2500) return;
+    starting = Date.now();
+    send([I.start(O.session.publicKey, O.idx, O.match)]).then(() => readOne(O.idx).then(x => x && apply(x))).catch(e => { if (e.code !== 5 && e.code !== 25) say(e.message || String(e), true); });
+  }
+  // A finished match goes on the leaderboard once; any seated page may send it.
+  let recordedMatch = -1;
+  function autoRecord(t) {
+    if (t.winner === null || t.seats[t.winner].counted || !O.session || O.seat === null || recordedMatch === t.idx * 1e6 + t.match) return;
+    recordedMatch = t.idx * 1e6 + t.match;
+    send([I.record(O.session.publicKey, O.idx, O.match)]).then(showBoard).catch(e => { if (e.code !== 26) recordedMatch = -1; });
+  }
   async function act(fn, onError) {
     O.busy = true; update(); say('');
     try { await fn(); readOne(O.idx).then(t => t && apply(t)).catch(() => {}); }
@@ -404,6 +451,7 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
         return '<div class="lobby"><span><b>Table ' + i + '</b> · ' + state + '</span><span class="lobby-actions">' + acts + '</span></div>';
       });
       $('olLobbies').innerHTML = rows.join('');
+      showBoard();
     } catch (e) { say('Could not read the tables: ' + (e.message || e), true); }
   }
   async function watch(code) {
@@ -450,7 +498,7 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
       await send([I.join(new W.PublicKey(O.player.publicKey), idx, match, O.session.publicKey, O.player.name)], { smaran: true });
       O.busy = false;
       enterOnlineAs(await readOne(idx));
-      say('Joined. Anyone seated can start once two or more have joined.');
+      say('Joined. The match starts 30 seconds after the second player joins.');
     } catch (e) { O.busy = false; O.session = null; say(e.message || String(e), true); }
   }
   // another device (or a page that lost its session key): the Smaran key names a new session key for the seat

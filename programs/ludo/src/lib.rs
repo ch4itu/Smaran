@@ -182,6 +182,7 @@ const T_MATCH: usize = 12; // u32, increases with every new match on this table
 const T_CREATED: usize = 16; // i64 unix seconds
 const T_ACTIVE: usize = 24; // i64 unix seconds of the last change
 const T_EVENTS: usize = 32; // u32 events written this match (the ring keeps the last RING)
+const T_LOBBY_AT: usize = 36; // u32 unix seconds when a second player sat down (0: fewer than two seated)
 const T_SEATS: usize = 40;
 const SEAT: usize = 104;
 const K_KEY: usize = 0; // the Smaran key that owns the seat
@@ -229,6 +230,7 @@ const STARTS: [u8; 4] = [0, 13, 26, 39];
 
 const VRF_RETRY: i64 = 8; // seconds before a seat may replace a roll whose callback never came
 const FINISH_HOLD: i64 = 20; // seconds a finished match stays on the table before a new one may start
+const LOBBY_WAIT: i64 = 30; // seconds a lobby stays open after the second player sits, then any seated player may start
 const ABANDON: i64 = 900; // seconds without any action after which a lobby or match may be replaced
 
 const MAX_PERMITTED_DATA_INCREASE: usize = 10_240;
@@ -259,6 +261,19 @@ const ERR_TABLE_BUSY: u32 = 21; // a match is still in progress on this table
 const ERR_OPERATOR: u32 = 22;
 const ERR_REQUEST: u32 = 23; // the callback is not for the outstanding roll
 const ERR_OWNER_ONLY: u32 = 24; // only the seat's Smaran key may do this
+const ERR_TOO_EARLY: u32 = 25; // the lobby's 30 seconds are not over
+const ERR_RECORDED: u32 = 26; // this match is already on the leaderboard
+const ERR_BOARD: u32 = 27; // not the leaderboard account
+
+// ---------------------------------------------------------------- leaderboard
+// One account, PDA ["lf-table", 255], on the same rollup as the tables. Header: magic, rows used (u16 at 8),
+// matches recorded (u32 at 12). Row: key 32, name (len + 15), wins, games, captures, tokens home (u16 each).
+const BOARD_IDX: u8 = 255;
+const BOARD_MAGIC: &[u8; 8] = b"LFBOARD1";
+const BOARD_ROWS: usize = 160;
+const ROW: usize = 56;
+const BOARD_SIZE: usize = 16 + BOARD_ROWS * ROW;
+const F_COUNTED: u8 = 4; // on the winner's seat: this match is on the leaderboard
 
 // ---------------------------------------------------------------- input parsing
 #[derive(Clone, Copy)]
@@ -407,6 +422,12 @@ fn now_unix() -> i64 {
     i64::from_le_bytes([buf[32], buf[33], buf[34], buf[35], buf[36], buf[37], buf[38], buf[39]])
 }
 
+fn rd16(d: &[u8], o: usize) -> u16 {
+    u16::from_le_bytes([d[o], d[o + 1]])
+}
+fn wr16(d: &mut [u8], o: usize, v: u16) {
+    d[o..o + 2].copy_from_slice(&v.to_le_bytes());
+}
 fn rd32(d: &[u8], o: usize) -> u32 {
     u32::from_le_bytes([d[o], d[o + 1], d[o + 2], d[o + 3]])
 }
@@ -670,6 +691,9 @@ fn leave_seat(t: &mut [u8], seat: usize) {
             t[o + K_PIECES + i] = BASE_POS;
         }
         t[T_SEATED] &= !(1 << seat);
+        if t[T_SEATED].count_ones() < 2 {
+            wr32(t, T_LOBBY_AT, 0);
+        }
         event(t, [E_LEAVE, seat as u8, 0, 0, 0, 0, 0, 0]);
         if t[T_SEATED] == 0 {
             t[T_PHASE] = PH_FREE;
@@ -759,7 +783,7 @@ fn ix_init_table(c: &Ctx) -> Result<(), u32> {
         return Err(ERR_OPERATOR);
     }
     let idx = ix[1];
-    if idx >= NTABLES {
+    if idx >= NTABLES && idx != BOARD_IDX {
         return Err(ERR_RANGE);
     }
     let idx_b = [idx];
@@ -768,12 +792,18 @@ fn ix_init_table(c: &Ctx) -> Result<(), u32> {
         return Err(ERR_PDA);
     }
     let bump_b = [bump];
+    let size = if idx == BOARD_IDX { BOARD_SIZE } else { TABLE_SIZE };
     let mut data = [0u8; 52];
     data[4..12].copy_from_slice(&ix[2..10]);
-    data[12..20].copy_from_slice(&(TABLE_SIZE as u64).to_le_bytes());
+    data[12..20].copy_from_slice(&(size as u64).to_le_bytes());
     data[20..52].copy_from_slice(program_id);
     invoke(accs, &Cpi { program: &SYSTEM_PROGRAM, metas: &[(0, true, true), (1, true, true)], data: &data, seeds: &[&[TABLE_SEED, &idx_b, &bump_b]] })?;
     let t = accs[1].data();
+    if idx == BOARD_IDX {
+        t[0..8].copy_from_slice(BOARD_MAGIC);
+        log("ludo: leaderboard ready");
+        return Ok(());
+    }
     t[0..8].copy_from_slice(MAGIC);
     t[T_IDX] = idx;
     reset_table(t);
@@ -921,7 +951,11 @@ fn ix_join(c: &Ctx) -> Result<(), u32> {
     who[..32].copy_from_slice(c.accs[0].key());
     who[32..].copy_from_slice(&c.ix[6..38]);
     take_seat(t, seat, &who, name);
-    wr64(t, T_ACTIVE, now_unix() as u64);
+    let now = now_unix();
+    wr64(t, T_ACTIVE, now as u64);
+    if t[T_SEATED].count_ones() >= 2 && rd32(t, T_LOBBY_AT) == 0 {
+        wr32(t, T_LOBBY_AT, now as u32);
+    }
     if t[T_SEATED] == 15 {
         t[T_PHASE] = PH_PLAYING;
         event(t, [E_START, seat as u8, 0, 0, 0, 0, 0, 0]);
@@ -950,8 +984,14 @@ fn ix_start(c: &Ctx) -> Result<(), u32> {
     if t[T_SEATED].count_ones() < 2 {
         return Err(ERR_PLAYERS);
     }
+    let now = now_unix();
+    let at = rd32(t, T_LOBBY_AT) as i64;
+    // (0 only on a lobby filled before this rule; it may start at once)
+    if at != 0 && now < at + LOBBY_WAIT {
+        return Err(ERR_TOO_EARLY);
+    }
     t[T_PHASE] = PH_PLAYING;
-    wr64(t, T_ACTIVE, now_unix() as u64);
+    wr64(t, T_ACTIVE, now as u64);
     event(t, [E_START, seat as u8, 0, 0, 0, 0, 0, 0]);
     log("ludo: started");
     Ok(())
@@ -1223,6 +1263,81 @@ fn ix_undelegate_callback(c: &Ctx) -> Result<(), u32> {
     Ok(())
 }
 
+/// Record a finished match on the leaderboard, once. Anyone may send it: every seated player gets a game, the
+/// winner a win, and each their captures and tokens home. A new player is added while rows are free; when the
+/// board is full, a winner replaces the row with the fewest wins (then fewest games) if that row has no wins.
+#[inline(never)]
+fn ix_record(c: &Ctx) -> Result<(), u32> {
+    // [anyone s, table w, board w]; idx, match u32
+    if c.n < 3 || c.ix.len() != 6 {
+        return Err(ERR_DATA);
+    }
+    if !c.accs[0].is_signer {
+        return Err(ERR_SIGNER);
+    }
+    let t = table(c, c.ix[1])?;
+    if rd32(c.ix, 2) != rd32(t, T_MATCH) {
+        return Err(ERR_MATCH);
+    }
+    if t[T_PHASE] != PH_FINISHED || t[T_WINNER] > 3 {
+        return Err(ERR_PHASE);
+    }
+    let w = t[T_WINNER] as usize;
+    if t[seat_at(w) + K_FLAGS] & F_COUNTED != 0 {
+        return Err(ERR_RECORDED);
+    }
+    let (bkey, _) = find_pda(&[TABLE_SEED, &[BOARD_IDX]], c.program_id);
+    let ba = &c.accs[2];
+    if !eq32(&bkey, ba.key()) || !eq32(ba.owner(), c.program_id) || !ba.is_writable {
+        return Err(ERR_BOARD);
+    }
+    let b = unsafe { core::slice::from_raw_parts_mut(ba.data, ba.len()) };
+    if b.len() != BOARD_SIZE || &b[0..8] != BOARD_MAGIC {
+        return Err(ERR_BOARD);
+    }
+    for s in 0..4 {
+        let o = seat_at(s);
+        if t[o + K_FLAGS] & 1 == 0 {
+            continue;
+        }
+        let won = s == w;
+        let used = rd16(b, 8) as usize;
+        let mut row = (0..used).find(|&r| eq32(&b[16 + r * ROW..16 + r * ROW + 32], &t[o + K_KEY..o + K_KEY + 32]));
+        if row.is_none() {
+            if used < BOARD_ROWS {
+                wr16(b, 8, used as u16 + 1);
+                row = Some(used);
+            } else if won {
+                let worst = (0..BOARD_ROWS).min_by_key(|&r| (rd16(b, 16 + r * ROW + 48), rd16(b, 16 + r * ROW + 50))).unwrap_or(0);
+                if rd16(b, 16 + worst * ROW + 48) == 0 {
+                    row = Some(worst);
+                }
+            }
+            if let Some(r) = row {
+                let ro = 16 + r * ROW;
+                for x in b[ro..ro + ROW].iter_mut() {
+                    *x = 0;
+                }
+                b[ro..ro + 32].copy_from_slice(&t[o + K_KEY..o + K_KEY + 32]);
+            }
+        }
+        if let Some(r) = row {
+            let ro = 16 + r * ROW;
+            b[ro + 32..ro + 48].copy_from_slice(&t[o + K_NAME..o + K_NAME + 16]);
+            if won {
+                wr16(b, ro + 48, rd16(b, ro + 48).saturating_add(1));
+            }
+            wr16(b, ro + 50, rd16(b, ro + 50).saturating_add(1));
+            wr16(b, ro + 52, rd16(b, ro + 52).saturating_add(t[o + K_CAPTURES] as u16));
+            wr16(b, ro + 54, rd16(b, ro + 54).saturating_add(t[o + K_HOME] as u16));
+        }
+    }
+    wr32(b, 12, rd32(b, 12).wrapping_add(1));
+    t[seat_at(w) + K_FLAGS] |= F_COUNTED;
+    log("ludo: recorded");
+    Ok(())
+}
+
 #[cfg(not(test))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
@@ -1248,6 +1363,7 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
             7 => ix_leave(&c),
             8 => ix_commit_undelegate(&c),
             9 => ix_rebind(&c),
+            10 => ix_record(&c),
             _ => Err(ERR_TAG),
         }
     };

@@ -29,6 +29,7 @@ More on all the Smaran apps (four games and Smaran Streaks): [BLITZ.md](../BLITZ
 | Program | `2i2REZWzDeAqKuJBEypH9fBtVZB6jmZbBRX7YH4fiETp` on Solana Devnet (source: `programs/ludo`) |
 | Rollup | MagicBlock devnet rollup `devnet-as.magicblock.app` (validator `MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57`) |
 | Tables | 8 accounts, PDA `["lf-table", i]`, delegated to the rollup |
+| Leaderboard | 1 account, PDA `["lf-table", 255]` (`HuMrtVFwX3Zcs6koon59vbjDmC41Lzvo1nsXjDtA3T2B`), 160 rows, delegated to the same rollup |
 | Dice | MagicBlock VRF (`Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz`, rollup queue `5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc`) |
 
 - **Seats belong to Smaran keys.** Create and Join are approved once with the player's Smaran key: here in Smaran's sign-in window, so the Smaran key never enters this page, or, in the [Smaran apps version](./), on the page itself after signing in there like the other Smaran apps. The approval names a *session key* that the page makes for the match, and that key signs every roll and move. "Continue here" on another device (one approval) gives the seat a new session key, and the old one stops working at once. A reloaded tab keeps playing with its session key.
@@ -39,11 +40,12 @@ More on all the Smaran apps (four games and Smaran Streaks): [BLITZ.md](../BLITZ
 
 ### Choices made for online play (please confirm)
 
-1. A match needs two to four people. A colour with nobody in it stays empty (there are no online bots). Anyone seated can start once two have joined, and four joined start the match automatically.
+1. A match needs two to four people. When a second player joins, a 30-second clock starts, and anyone who joins in those 30 seconds plays too. Then the match starts by itself with everyone seated (2, 3 or 4). Four joined start it at once. A colour with nobody in it stays empty (there are no online bots). If players leave the lobby and fewer than two remain, the clock starts again with the next second player. The program refuses an earlier start; with no server, each seated page sends Start when the clock runs out and the first one counts.
 2. Leaving mid-match takes that colour off the board (except tokens already home). If only one colour is left, it wins.
 3. "Pass" is allowed only when the waiting die has no legal move left, for example when someone has just formed a block.
 4. The bonus after a six or a capture is shown, as in the preview. With no turns, everyone may always roll again once their die is played.
-5. A finished match stays on its table for 20 seconds. A lobby or match with no action for 15 minutes can be replaced by a new one.
+5. Every finished match goes on the leaderboard once: a game for each seated player, a win for the winner, and their captures. The page of any seated player records it as soon as the match ends. The board keeps 160 players; when it is full, a new winner replaces a player with no wins.
+6. A finished match stays on its table for 20 seconds. A lobby or match with no action for 15 minutes can be replaced by a new one.
 
 ## Checks
 
