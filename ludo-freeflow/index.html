@@ -48,6 +48,12 @@
 #lfSignin .stack .px-btn{width:100%;font-size:10px}
 #lfSignin .alert{min-height:1.3em;margin:10px 0 0;font-family:var(--px-body);font-size:19px;color:var(--px-red)}
 #lfSignin .px-note{font-family:var(--px-body);font-size:19px}
+#lfStart{width:min(520px,92vw);padding:18px}
+#lfStart h3{font-family:var(--px-head);font-weight:400;font-size:13px;text-transform:uppercase;line-height:1.6;color:var(--px-red);margin:0 0 6px;text-align:center}
+#lfStart > form > small{display:block;margin-bottom:10px;font-family:var(--px-body);font-size:21px;line-height:1.15;color:var(--px-ink-2);text-align:center}
+#lfStart .choice{display:block;width:100%;margin:0 0 10px;padding:12px 14px;text-align:left;font-size:11px;line-height:1.5}
+#lfStart .choice small{display:block;margin-top:4px;font-family:var(--px-body);font-size:19px;text-transform:none;letter-spacing:0;line-height:1.1}
+#lfStart .apps{display:block;text-align:center;margin-top:4px;font-family:var(--px-body);font-size:19px;color:var(--px-ink)}
 /* the local preview note in full, never cut off */
 .warn,#modeNote{display:block!important;-webkit-line-clamp:unset!important;max-height:none!important;overflow:visible!important}
 /* online tables, shown to everyone */
@@ -69,13 +75,22 @@
 </style>
 </head><body><main>
 <h1>Ludo <span>Freeflow</span></h1><p>Four players. One board. Zero waiting.</p>
-<div id="smaranBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0"><button id="smaranSignIn" type="button" style="min-height:42px" title="Your username and password from any app with Smaran login">Sign in</button><span id="smaranStatus" role="status">Guest · local preview</span></div><div class="warn" id="modeNote"><b>LOCAL PREVIEW.</b> You are red, against three bots. Dice here come from your browser. In online matches every die is a fair random draw by MagicBlock (VRF), so nobody can fix a roll.</div>
+<div id="smaranBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0"><button id="lfMenu" type="button" style="min-height:42px">Menu</button><button id="smaranSignIn" type="button" style="min-height:42px" title="Your username and password from any app with Smaran login">Sign in</button><span id="smaranStatus" role="status">Guest · local preview</span></div><div class="warn" id="modeNote"><b>LOCAL PREVIEW.</b> You are red, against three bots. Dice here come from your browser. In online matches every die is a fair random draw by MagicBlock (VRF), so nobody can fix a roll.</div>
 
 <section class="hud" role="status" aria-live="polite"><div><div class="hud-label" id="hudLabel">YOU · RED TEAM</div><div id="hint" class="hud-message">Roll the dice to begin</div></div><div id="dieFace" class="hud-die" aria-label="Latest dice roll"><span class="die-pips p5" id="diePips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div></section><canvas id="board" width="750" height="750" aria-label="Ludo board, tap a highlighted token to move"></canvas>
 <div class="control-deck"><div class="control-caption"><span>◈ FREEFLOW CONTROL DECK</span><span id="rollLabel">READY TO ROLL</span></div><nav><button id="roll" aria-label="Roll the dice">ROLL THE DICE <span class="roll-cube" aria-hidden="true">⚄</span></button><button id="pause" title="Pause game" aria-label="Pause game">Ⅱ</button><button id="reset" title="Restart game" aria-label="Restart game">↻</button></nav><div class="control-help" id="controlHelp">Roll, then tap a glowing red token to move it.</div></div><div id="cinema" class="cinema" aria-live="polite" aria-atomic="true"><div class="cinema-flare"></div><div id="cinemaText" class="cinema-text"></div><div id="cinemaSub" class="cinema-sub"></div></div>
 <div id="scores" class="scores"></div><div id="log"></div><section id="online" class="online" aria-label="Online tables"><h2 id="olTitle">Online tables</h2><p class="online-sub" id="olSub">8 tables of 4 players. Sign in to create or join a match. Anyone can watch.</p><div class="lf-rules" id="olRules"><b>How an online match starts</b>1. One player creates a match. Others join with its code or invite link.<br>2. When a second player joins, a 30-second clock starts. Anyone else who joins in those 30 seconds plays too.<br>3. After 30 seconds the match starts by itself with everyone seated: 2, 3 or 4 players. With 4 it starts at once.<br>4. Every finished match goes on the leaderboard: a win for the winner, a game for everyone.</div><div class="online-row" id="onlineIdle"><button id="olCreate" type="button">Create online match</button><input id="olCode" placeholder="Code, e.g. 3-12" aria-label="Match code" autocomplete="off"><button id="olJoin" type="button">Join</button></div><div id="olLobbies" class="online-lobbies"><div class="lobby"><span>Reading the tables…</span></div></div><div class="online-row" id="onlineMatch" hidden><span id="olInfo"></span><button id="olStart" type="button" hidden>Start</button><button id="olShare" type="button" hidden>Copy invite link</button><button id="olLeave" type="button">Leave match</button></div><div id="olMsg" class="online-msg" role="status" aria-live="polite"></div><div id="olBoard" aria-label="Leaderboard"></div></section><p class="footer-note"><strong>How to play:</strong> No turns: roll whenever your die is played · Roll 6 to enter · Exact roll to finish · Stars and start squares are safe and shared · Two same-colour tokens block other colours, except on those squares · A six or a capture earns a bonus roll · Three sixes in a row forfeit the third · In the preview the bots roll on their own, about once every two seconds, whether you roll or not · Tap a glowing token.</p>
 <p class="footer-note">Online: sign in with your username and password (no wallet, no seed phrase, no crypto). Every roll and move is checked by the game's program on Solana's test network, running on MagicBlock, so all four players see the same fair game. Your seat is tied to your account; for each match this page makes a short-lived key that plays your moves. The local preview works offline.</p><p class="footer-note"><a href="../">All Smaran apps</a></p>
 </main>
+<dialog id="lfStart" class="px-panel">
+  <form method="dialog">
+    <h3>Ludo Freeflow</h3>
+    <small>Choose how to play.</small>
+    <button id="lfStartBots" class="px-btn choice go" type="button">Play with bots<small>You are red against three bots. No sign-in, works offline.</small></button>
+    <button id="lfStartOnline" class="px-btn choice" type="button">Play online<small>With 2 to 4 people. Sign in, then create a match or join one with its code.</small></button>
+    <a class="apps" href="../">All Smaran apps</a>
+  </form>
+</dialog>
 <dialog id="lfSignin" class="px-panel">
   <form method="dialog" id="lfForm">
     <h3 id="lfTitle">Sign in</h3>
@@ -644,6 +659,20 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
   };
   setInterval(() => { if (!online && !document.hidden) refreshLobbies(); }, 6000);
 
+  // Start window: bots or online. While it is open the bots wait.
+  function openStart() {
+    if (online) { $('online').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    paused = true; update();
+    if (!$('lfStart').open) $('lfStart').showModal();
+  }
+  $('lfMenu').onclick = openStart;
+  $('lfStartBots').onclick = () => { $('lfStart').close(); paused = false; update(); $('board').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+  $('lfStartOnline').onclick = () => {
+    $('lfStart').close();
+    withSignIn(() => { refreshLobbies(); $('online').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  };
+  $('lfStart').addEventListener('cancel', e => e.preventDefault()); // Esc does not leave the page without a choice
+
   // a reloaded tab keeps playing with its session key; an invite link shows that match
   (async () => {
     const q = new URLSearchParams(location.search), stored = storedSession();
@@ -665,6 +694,8 @@ document.getElementById('roll').onclick=()=>{if(online)return online.roll();if(w
       }
     } catch (e) { /* the preview still works offline */ }
     if (!online) refreshLobbies();
+    // a reloaded match or an invite link goes straight there; everyone else chooses first
+    if (!online && !(q.has('t') && q.has('m'))) openStart();
   })();
 })();
 </script></body></html>
