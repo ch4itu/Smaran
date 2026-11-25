@@ -2,7 +2,7 @@
 
 Four colours on one board, and no turns: every player rolls and moves whenever their own die is played.
 
-- **Local preview** (no sign-in): you are red, three bots play the other colours, dice come from the browser. Fully offline. The bots roll only as often as you do; a bonus roll after a six or a capture is one they do not match.
+- **Local preview** (no sign-in): you are red, three bots play the other colours, dice come from the browser. Fully offline. The bots roll on their own, about once every two seconds each, whether you roll or not. Pause stops them.
 - **Online match** (sign in with Smaran): two to four people, one colour each. Every die comes from MagicBlock VRF and is applied on chain before the page shows it. Nobody needs SOL, a wallet or a seed phrase.
 
 - **Capacity:** 8 tables of 4 seats, so 32 players online at once.
