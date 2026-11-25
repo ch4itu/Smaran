@@ -81,6 +81,7 @@ Most people stop here                The same login works in every Smaran app
 Smaran is Sanskrit for remembering: all a person needs is to remember a username and a password. Full guide: [login/README.md](login/README.md).
 
 ---
+**Note : ** The account is not intended for storing or transacting any other funds or tokens.
 
 ## Proof: Five Working Apps on One Login
 
