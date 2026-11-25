@@ -38,8 +38,8 @@ Make one account with a username and a password, and use it in every app below, 
 | --- | --- |
 | [Magic Over](https://ch4itu.github.io/Smaran/magic-over/) | Bat in a 3D cricket duel against the computer or a friend. Sign in, hit one four or six in any match, win or lose, and claim a relic. You can give a relic to another player. |
 | [EternalBliss](https://ch4itu.github.io/Smaran/eternalbliss/) | An adventure game with quests, battles, shared worlds and duels. Your relics show in its menu. |
-| [SmaranWorld](https://ch4itu.github.io/Smaran/smaranworld/) | A shared world, the Alderlands: 144 villages spread across fields, forests, hills, lakes, desert and tundra, where signed-in players see each other walk and chat, on one clock for everyone. Each village is kept by a relic holder, with a monument and a sign the keeper writes. |
-| [Ludo Freeflow](https://ch4itu.github.io/Smaran/ludo-freeflow/) | Ludo with no turns: everyone rolls and moves at once. Pick a table online, and every die is a fair random draw. |
+| [SmaranWorld](https://ch4itu.github.io/Smaran/smaranworld/) | A shared world, the Alderlands: 144 villages spread across fields, forests, hills, lakes, desert and tundra, where signed-in players see each other walk and chat, on one clock for everyone. Each village is kept by a relic holder, with a monument, a sign the keeper writes and a plot the keeper can build in. |
+| [Ludo Freeflow](https://ch4itu.github.io/Smaran/ludo-freeflow/) | Ludo with no turns: everyone rolls and moves at once. Play the bots, or online with 2 to 4 people: a match starts 30 seconds after a second player joins, every die is a fair random draw, and wins go on a leaderboard. |
 | [Smaran Streaks](https://ch4itu.github.io/Smaran/streaks/) | Not a game: keep up to three daily habits, one check-in a day. It shows the same login works for everyday apps too. |
 
 A relic is like a medal: a record of something you did. It is not money. It cannot be bought or sold, there is no marketplace and no betting.
@@ -78,7 +78,8 @@ Games where people collect, compete and win things they really own (MagicBlock c
 - **Relics and achievements** ([`programs/play`](programs/play)): one program that records what a player did and which relic they hold. Magic Over checks the match on the private rollup and MagicBlock VRF draws which relic you get. Relics can be given to another player.
 - **Relics shown across apps:** EternalBliss's menu and SmaranWorld's villages read the same relic records, under the same Smaran key.
 - **SmaranWorld:** the shared world, its 144 villages in open country, chat and shared clock (built on our earlier city-builder engine). The land is made from one seed on every page, so it needs no map file and can grow past 1,000 villages ([SmaranWorld README](smaranworld/README.md)).
-- **Ludo Freeflow online:** tables of four on MagicBlock with VRF dice, sign-in on the page and a list of every table (the local game is older).
+- **Ludo Freeflow online:** tables of four on MagicBlock with VRF dice, sign-in on the page, a list of every table, a 30-second lobby that then starts by itself, and a leaderboard (the local game is older).
+- **Village building in SmaranWorld:** a keeper places or clears up to 30 things within 12 tiles of the village centre, saved on the rollup and shown on every page.
 - **Smaran Streaks**, the non-game app.
 - **The save fund** ([`programs/save-fund`](programs/save-fund)): one address anyone can fund, so saves to Solana keep going without us, and the rule changes that let anyone refill a low account.
 - **One sign-in card and one look** across all apps.
@@ -88,7 +89,7 @@ Games where people collect, compete and win things they really own (MagicBlock c
 **How MagicBlock is used**
 
 - **Private rollup (devnet-tee):** Magic Over's matches (the bowler's variation stays hidden from the batter until the ball is played), relics and achievements, and the leaderboard.
-- **Public rollup (devnet-as):** Smaran logins, EternalBliss, SmaranWorld's rooms and chat, Ludo Freeflow's tables and Streaks.
+- **Public rollup (devnet-as):** Smaran logins, EternalBliss, SmaranWorld's rooms, chat, signs and village plans, Ludo Freeflow's tables and leaderboard, and Streaks.
 - **VRF:** which relic a player gets, and every Ludo die.
 - **Free play:** every player action is a rollup transaction that costs the player nothing. Each shared account pays MagicBlock for its own saves to Solana from a small reserve, which the save fund refills.
 
@@ -101,8 +102,8 @@ Measured on Solana Devnet on 23 November 2026.
 | App | Players at once | Notes |
 | --- | --- | --- |
 | Magic Over | 16 in friend matches, or 8 against the AI | 8 match tables, reused between matches. Leaderboard: 140 players. |
-| Ludo Freeflow | 32 online (8 tables of 4) | The local game against bots needs no sign-in and works offline. |
-| SmaranWorld | 42 signed-in players shown to each other | Guests can look around without being shown. Chat keeps the last 24 lines. 144 villages, 160 sign places. |
+| Ludo Freeflow | 32 online (8 tables of 4) | The local game against bots needs no sign-in and works offline. Leaderboard: 160 players. |
+| SmaranWorld | 42 signed-in players shown to each other | Guests can look around without being shown. Chat keeps the last 24 lines. 144 villages, 160 sign places, 160 plan places of up to 30 changes. |
 | EternalBliss | 160 walking (5 worlds of 32) | 4 duel tables per world. The program allows up to 64 worlds. |
 | Smaran Streaks | No limit on check-ins at once | 316 people (4 groups of 79), up to 3 habits each. A group saves itself to Solana at most once an hour from its own 0.02 SOL reserve. |
 
@@ -119,7 +120,7 @@ Measured on Solana Devnet on 23 November 2026.
   - Streaks groups carry 0.02 SOL each, the leaderboards 0.025 and 0.005 SOL, EternalBliss's worlds 0.076 to 0.1 SOL and its character books 0.05 SOL.
   - The save fund holds about 0.41 SOL, enough for about 40 more refills, at most 0.1 SOL a day.
   - When a reserve runs out, play still works on the rollup and the copy on Solana waits until the next refill.
-- SmaranWorld's presence, chat and signs live on the rollup and are not saved to Solana. Saving them costs nothing, but a rollup reset would clear them.
+- SmaranWorld's presence, chat, signs and village plans, and Ludo Freeflow's tables and leaderboard, live on the rollup and are not saved to Solana. Saving them costs nothing, but a rollup reset would clear them.
 
 ## What it costs
 
@@ -131,12 +132,12 @@ Measured on Solana Devnet on 23 November 2026.
 | Smaran registry, 12 groups (420 places) | 0.69 |
 | Relic and achievement accounts | 0.52 |
 | EternalBliss worlds (character books not counted) | 0.62 |
-| SmaranWorld room, chat and signs | 0.15 |
+| SmaranWorld room, chat, signs and village plans | 0.26 |
 | Magic Over tables and leaderboard | 0.12 |
-| Ludo tables | 0.03 |
+| Ludo tables and leaderboard | 0.07 |
 | Streaks, 4 groups (rent plus a 0.02 SOL save reserve each) | 0.29 |
 | Save fund (SOL given for future saves) | 0.41 |
-| **Total** | **about 5.1** |
+| **Total** | **about 5.3** |
 
 Almost all of it is held as rent deposits (SOL that Solana keeps in an account so the account stays stored), not burned. Registry groups cannot be closed today, so count those as spent. Rent is the same on mainnet, where it is real SOL.
 
@@ -152,7 +153,7 @@ Almost all of it is held as rent deposits (SOL that Solana keeps in an account s
 | MagicBlock delegation deposits for the new accounts | 0.3 to 3 |
 | **Total** | **about 15 to 18** |
 
-Running cost on top: 0.0001 SOL per save to Solana once an account passes its 25 free saves in a delegation. The apps save on sign-ups, password changes, relic claims and gifts, and would save on village edits. So the cost follows those events, not hours played: 10,000 of them cost roughly 1 to 2 SOL.
+Running cost on top: 0.0001 SOL per save to Solana once an account passes its 25 free saves in a delegation. The apps save on sign-ups, password changes, relic claims and gifts. So the cost follows those events, not hours played: 10,000 of them cost roughly 1 to 2 SOL.
 
 ## Programs on Solana Devnet
 

@@ -104,22 +104,22 @@ Quests, battles, shared worlds and duels. Your relics show in its menu.
 | **Uses MagicBlock** | Shared worlds, duels and character books on the public rollup, saved to Solana every few minutes |
 
 ### 3. SmaranWorld: 144 villages to walk and talk in
-A shared world of villages in open country: fields, forests, hills, lakes, desert and tundra. Each village is kept by a relic holder.
+A shared world of villages in open country: fields, forests, hills, lakes, desert and tundra. Each village is kept by a relic holder, who can write its sign and build in it.
 
 | | |
 | --- | --- |
 | **Play** | [smaranworld](https://ch4itu.github.io/Smaran/smaranworld/) |
 | **Read more** | [smaranworld/README.md](smaranworld/README.md) |
-| **Uses MagicBlock** | Where players stand, what they say and each village's sign, on the public rollup |
+| **Uses MagicBlock** | Where players stand, what they say, and each village's sign and building plan, on the public rollup |
 
 ### 4. Ludo Freeflow: Ludo with no turns
-Everyone rolls and moves at once. Pick a table online.
+Everyone rolls and moves at once. Play the bots, or online with 2 to 4 people: a match starts 30 seconds after a second player joins.
 
 | | |
 | --- | --- |
 | **Play** | [ludo-freeflow](https://ch4itu.github.io/Smaran/ludo-freeflow/) |
 | **Read more** | [ludo-freeflow/README.md](ludo-freeflow/README.md) |
-| **Uses MagicBlock** | Tables on the public rollup; every die from VRF |
+| **Uses MagicBlock** | Tables and the leaderboard on the public rollup; every die from VRF |
 
 ### 5. Smaran Streaks: daily habits (not a game)
 Keep up to three habits, one check-in a day. It shows the same login works for everyday apps too.
