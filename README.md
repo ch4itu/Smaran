@@ -271,13 +271,13 @@ More: [Blitz v10 limits](BLITZ.md#limits) and [Smaran's cons](login/README.md#co
 - [x] Ludo Freeflow online, with VRF dice
 - [x] Smaran Streaks, the first app that is not a game
 - [x] The save fund: one address anyone can fund, and refills anyone can run
+- [x] Village building in SmaranWorld: a keeper places or clears up to 30 things within 12 tiles of the village centre
 
 ### Planned
 - [ ] Mainnet
 - [ ] Give up or share the upgrade key once the rules are settled
 - [ ] Non-intrusive sponsor boards and village signs, to cover the running costs
 - [ ] SmaranWorld past 144 villages (a small program upgrade), and a village for every player
-- [ ] Village building: a keeper builds in a plot 12 tiles around the village's centre
 - [ ] SmaranWorld on the rollup's clock, as EternalBliss already is, so a wrong device clock does not matter
 - [ ] More deeds to earn, and relic perks in EternalBliss and Ludo Freeflow
 - [ ] Better cricket motion, teams and smooth mobile play in Magic Over

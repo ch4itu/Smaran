@@ -7,7 +7,8 @@
 //!
 //! Instructions (first data byte):
 //! Accounts (kind): 0 room ["city-room", 0] who is where; 1 chat ["city-chat", 0] the last 24 messages;
-//! 2 signs ["city-sign", 0..4] 32 village welcome signs each (village v uses account v % 5). Each 4,112 bytes,
+//! 2 signs ["city-sign", 0..4] 32 village welcome signs each (village v uses account v % 5); 3 plans
+//! ["city-plan", 0..4] 32 village plans each (village v uses account v % 5). Each 4,112 bytes,
 //! delegated to the devnet rollup.
 //!   0 Init        base [operator s w, account w, system]                               kind, idx, lamports u64
 //!   1 Delegate    base [operator s w, account w, this program, buffer w, record w, metadata w, delegation, system]
@@ -16,6 +17,7 @@
 //!   3 Leave       ER   [player s, room w]                                               idx
 //!   4 Say         ER   [player s, chat w]                       idx, name_len, name, text_len, text (1-80 bytes)
 //!   5 SetSign     ER   [player s, signs w]            idx, village (0-143), name_len, name, text_len, text (0-56)
+//!   6 SetPlan     ER   [player s, plans w]            idx, village (0-143), count (0-30), count x (x, y, item)
 //!   8 CommitUndelegate ER [operator s w, account w, magic program, magic context w]     kind, idx
 //!  MagicBlock undelegate callback (8-byte discriminator)
 //! A slot is the signer's own, else a free one, else one not updated for STALE seconds.
@@ -127,14 +129,17 @@ const EXTERNAL_UNDELEGATE: [u8; 8] = [196, 28, 41, 206, 48, 37, 51, 167];
 const ROOM_SEED: &[u8] = b"city-room";
 const CHAT_SEED: &[u8] = b"city-chat";
 const SIGN_SEED: &[u8] = b"city-sign";
+const PLAN_SEED: &[u8] = b"city-plan";
 const KIND_ROOM: u8 = 0;
 const KIND_CHAT: u8 = 1;
 const KIND_SIGN: u8 = 2;
+const KIND_PLAN: u8 = 3;
 fn seed_of(kind: u8) -> Option<&'static [u8]> {
     match kind {
         KIND_ROOM => Some(ROOM_SEED),
         KIND_CHAT => Some(CHAT_SEED),
         KIND_SIGN => Some(SIGN_SEED),
+        KIND_PLAN => Some(PLAN_SEED),
         _ => None,
     }
 }
@@ -142,6 +147,7 @@ fn magic_of(kind: u8) -> &'static [u8; 8] {
     match kind {
         KIND_CHAT => b"SMCHAT01",
         KIND_SIGN => b"SMSIGN01",
+        KIND_PLAN => b"SMPLAN01",
         _ => MAGIC,
     }
 }
@@ -161,6 +167,18 @@ const G_NAME: usize = 37; // length + up to 32 bytes
 const G_TEXT: usize = 70; // length + up to 56 bytes
 const SIGN_TEXT_MAX: usize = 56;
 const TOWNS: u8 = 144; // villages: 12 towns of 12 villages each
+// village plans: SIGNS entries of SIGN bytes, chosen as for signs. An entry is one writer's changes to one village:
+// up to PLAN_MAX edits of 3 bytes (x and y as 0-24 for -12 to +12 tiles from the village centre, then the item:
+// 0 clears that tile, 1-63 places an item from the pages' list). Pages show a plan only when its writer is the
+// village's current keeper, as with signs, and check where each item may stand.
+const P_TS: usize = 32;
+const P_TOWN: usize = 36;
+const P_COUNT: usize = 37;
+const P_EDITS: usize = 38;
+const PLAN_MAX: usize = 30;
+const PLOT: u8 = 24; // 2 x 12 tiles
+const ITEMS: u8 = 64;
+const _: () = assert!(P_EDITS + PLAN_MAX * 3 <= SIGN);
 const _: () = assert!(HEADER + CHAT_N * MSG <= ROOM_SIZE && M_TEXT + 1 + TEXT_MAX <= MSG);
 const _: () = assert!(HEADER + SIGNS * SIGN <= ROOM_SIZE && G_TEXT + 1 + SIGN_TEXT_MAX <= SIGN);
 const NROOMS: u8 = 5; // account index per kind; the room and chat use 0, the village signs use 0 to 4
@@ -635,6 +653,63 @@ fn ix_set_sign(c: &Ctx) -> Result<(), u32> {
     Ok(())
 }
 
+/// Pure check of a plan's edits (tested on the host).
+fn plan_ok(edits: &[u8]) -> bool {
+    edits.len() % 3 == 0 && edits.len() / 3 <= PLAN_MAX && edits.chunks(3).all(|e| e[0] <= PLOT && e[1] <= PLOT && e[2] < ITEMS)
+}
+
+/// Pure entry choice, as for signs (tested on the host): the writer's own entry for the town, else the oldest (an
+/// empty entry is the oldest).
+fn choose_entry(t: &[u8], who: &[u8], town: u8) -> usize {
+    let (mut pick, mut oldest) = (0usize, u32::MAX);
+    for i in 0..SIGNS {
+        let o = HEADER + i * SIGN;
+        let ts = rd32(t, o + P_TS);
+        if ts != 0 && t[o + P_TOWN] == town && eq32(&t[o..o + 32], who) {
+            return i;
+        }
+        if ts < oldest {
+            oldest = ts;
+            pick = i;
+        }
+    }
+    pick
+}
+
+#[inline(never)]
+fn ix_set_plan(c: &Ctx) -> Result<(), u32> {
+    // [player s, plan w]; data: tag, idx, town, count, count x (x, y, item). Replaces the writer's plan for the town.
+    let ix = c.ix;
+    if ix.len() < 4 {
+        return Err(ERR_DATA);
+    }
+    if !c.accs[0].is_signer {
+        return Err(ERR_SIGNER);
+    }
+    let t = account(c, KIND_PLAN, ix[1])?;
+    let (town, n) = (ix[2], ix[3] as usize);
+    if town >= TOWNS {
+        return Err(ERR_RANGE);
+    }
+    let edits = &ix[4..];
+    if edits.len() != n * 3 || !plan_ok(edits) {
+        return Err(ERR_DATA);
+    }
+    let who = c.accs[0].key();
+    let o = HEADER + choose_entry(t, who, town) * SIGN;
+    for b in t[o..o + SIGN].iter_mut() {
+        *b = 0;
+    }
+    t[o..o + 32].copy_from_slice(who);
+    wr32(t, o + P_TS, now_unix() as u32);
+    t[o + P_TOWN] = town;
+    t[o + P_COUNT] = n as u8;
+    t[o + P_EDITS..o + P_EDITS + edits.len()].copy_from_slice(edits);
+    let k = rd32(t, H_COUNT).wrapping_add(1);
+    wr32(t, H_COUNT, k);
+    Ok(())
+}
+
 #[inline(never)]
 fn ix_leave(c: &Ctx) -> Result<(), u32> {
     // [player s, room w]; data: tag, idx
@@ -829,6 +904,7 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
             3 => ix_leave(&c),
             4 => ix_say(&c),
             5 => ix_set_sign(&c),
+            6 => ix_set_plan(&c),
             8 => ix_commit_undelegate(&c),
             _ => Err(ERR_TAG),
         }
@@ -836,5 +912,40 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
     match r {
         Ok(()) => 0,
         Err(code) => code as u64,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_plan_has_at_most_30_edits_inside_the_plot() {
+        assert!(plan_ok(&[]));
+        assert!(plan_ok(&[0, 24, 63, 12, 12, 0]));
+        assert!(!plan_ok(&[25, 0, 1]));
+        assert!(!plan_ok(&[0, 25, 1]));
+        assert!(!plan_ok(&[0, 0, 64]));
+        assert!(!plan_ok(&[1, 2]));
+        assert!(plan_ok(&[1u8; 90]));
+        assert!(!plan_ok(&[1u8; 93]));
+    }
+    #[test]
+    fn a_writer_keeps_one_entry_per_village_and_the_oldest_goes_first() {
+        let mut t = vec![0u8; ROOM_SIZE];
+        let (a, b) = ([7u8; 32], [8u8; 32]);
+        let put = |t: &mut Vec<u8>, i: usize, who: &[u8; 32], town: u8, ts: u32| {
+            let o = HEADER + i * SIGN;
+            t[o..o + 32].copy_from_slice(who);
+            wr32(t, o + P_TS, ts);
+            t[o + P_TOWN] = town;
+        };
+        for i in 0..SIGNS {
+            put(&mut t, i, &b, 1, 100 + i as u32);
+        }
+        put(&mut t, 5, &a, 3, 900);
+        assert_eq!(choose_entry(&t, &a, 3), 5); // own entry
+        assert_eq!(choose_entry(&t, &a, 4), 0); // another village: the oldest
+        put(&mut t, 9, &b, 1, 0);
+        assert_eq!(choose_entry(&t, &a, 4), 9); // an empty entry first
     }
 }
