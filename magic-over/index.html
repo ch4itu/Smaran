@@ -1272,6 +1272,7 @@ details p, details li { color: var(--muted); font-size: 14px; }
   <div id="finishCard" hidden>
     <div class="card">
       <div class="eyebrow">Result</div>
+      <p id="finishWho" class="muted"></p>
       <h2 id="finishTitle">Match over</h2>
       <div id="finishLines" class="muted"></div>
       <p id="sixHitterResult" class="muted" hidden></p>
@@ -1995,7 +1996,8 @@ globalThis.SONet = (() => {
         const code = e?.rpc?.data?.err;
         const why = code ? errorText(code, errors) : (e.message || String(e));
         if (attempt === 0 && /blockhash/i.test(why)) continue;
-        throw Object.assign(new Error(`${label}: ${why}`), { code: code?.InstructionError?.[1]?.Custom });
+        // the same transaction was sent a moment ago (same blockhash): wait for and report that one's result
+        if (!/already been processed/i.test(why)) throw Object.assign(new Error(`${label}: ${why}`), { code: code?.InstructionError?.[1]?.Custom });
       }
       if (!wait) return sig;
       const deadline = performance.now() + 15000;
@@ -2194,7 +2196,12 @@ globalThis.SONet = (() => {
     let at = await findSixHitter();
     if (!at) {
       step('Recording Boundary Hitter…');
-      const data = new Uint8Array(8); data[0] = 7; data[1] = 1; data[3] = idx; new DataView(data.buffer).setUint32(4, matchId >>> 0, true);
+      // The relic program accepts the match number only for friend matches (it refuses it on an AI table with error
+      // 28), so against the AI the claim names the table alone, after checking here that it still holds this match.
+      const table = (await readTables())[idx];
+      if (!table || table.matchId !== matchId) throw new Error(PLAY_ERRORS[8]);
+      const pin = table.mode === 'PVP';
+      const data = new Uint8Array(pin ? 8 : 4); data[0] = 7; data[1] = 1; data[3] = idx; if (pin) new DataView(data.buffer).setUint32(4, matchId >>> 0, true);
       await send([playIx([meta(player.key, true, false), meta(PLAY_REG, false, false), ...PLAY_ACH.map(a => meta(a, false, true)), meta(TABLES[idx].state, false, false), meta(MAGIC_PROGRAM, false, false), meta(MAGIC_CONTEXT_PK, false, true), meta(FEE_VAULT, false, true)], data)], { label: 'Boundary Hitter', errors: PLAY_ERRORS });
       for (let i = 0; i < 10 && !at; i++) { at = await findSixHitter(); if (!at) await sleep(500); }
       if (!at) throw new Error('Boundary Hitter was recorded but could not be read back. Try again.');
@@ -4861,10 +4868,17 @@ globalThis.SOCompetition = (() => {
     $('who').textContent = guest ? 'Playing as guest' : `Signed in as ${name}`;
     $('whoKey').textContent = short(N.player.b58);
     $('homeWho').textContent = guest ? 'Not signed in' : `Signed in as ${name}`;
+    $('finishWho').textContent = guest ? 'Playing as guest: sign in before a match to claim relics.' : `Signed in as ${name}`;
     $('btnHomeSign').textContent = guest ? 'Sign in' : 'Sign out';
   }
 
-  let connecting;
+  let connecting, connectedAt = 0, hiddenSince = false;
+  document.addEventListener('visibilitychange', () => { if (document.hidden) hiddenSince = true; });
+  // before Play again: a fresh MagicBlock sign-in and clock if the tab was hidden or idle for over 3 minutes
+  async function reconnectIfStale() {
+    if (!hiddenSince && performance.now() - connectedAt < 180000) return;
+    await connectForPlay();
+  }
   function connectForPlay() {
     const player = N.player;
     if (connecting?.player === player) return connecting.ready;
@@ -4878,6 +4892,7 @@ globalThis.SOCompetition = (() => {
         throw error;
       }
       if (player !== N.player) throw new Error('Player changed. Open the match again.');
+      connectedAt = performance.now(); hiddenSince = false;
       N.freshBlockhash(true).catch(() => {});
     })().finally(() => { if (connecting?.player === player) connecting = null; });
     connecting = { player, ready };
@@ -5579,6 +5594,8 @@ function createBattingGuide(root, playShot) {
     busy(button, true, session.mode === 'PVP' ? 'Waiting for rematch…' : 'Opening next game…');
     const active = () => M === session;
     try {
+      await reconnectIfStale();
+      if (!active()) return;
       if (session.mode === 'PVP') {
         const saved=await session.savePromise;
         if(!active())return;
@@ -5590,7 +5607,7 @@ function createBattingGuide(root, playShot) {
       } else {
         await createMatch(session.mode === 'AI_FULL' ? 2 : 1);
       }
-    } catch (e) { if (active()) { $('rematchStatus').textContent = e.message || String(e); toast(e.message || String(e), 'bad'); } }
+    } catch (e) { hiddenSince = true; if (active()) { $('rematchStatus').textContent = e.message || String(e); toast(e.message || String(e), 'bad'); } }
     finally { session.rematching = false; busy(button, false); }
   };
   $('btnExit').onclick = () => { const watching = M && M.watching; leaveMatch(); if (watching) { openLive(); return; } show(N.player && !N.player.guest ? 'lobby' : 'home'); if (N.player && !N.player.guest) openLobby(); };
