@@ -175,6 +175,28 @@ fn leaving_the_lobby_frees_the_seat() {
 }
 
 #[test]
+fn leaving_the_lobby_below_two_players_clears_the_30_second_clock() {
+    let mut t = fresh(0b0011);
+    t[T_PHASE] = PH_LOBBY;
+    wr32(&mut t, T_LOBBY_AT, 1_000);
+    leave_seat(&mut t, 1);
+    assert_eq!(rd32(&t, T_LOBBY_AT), 0);
+    let mut t = fresh(0b0111);
+    t[T_PHASE] = PH_LOBBY;
+    wr32(&mut t, T_LOBBY_AT, 1_000);
+    leave_seat(&mut t, 2);
+    assert_eq!(rd32(&t, T_LOBBY_AT), 1_000); // two still seated: the clock keeps running
+}
+
+#[test]
+fn the_leaderboard_fits_one_account_and_a_counted_winner_stays_in_play() {
+    assert!(BOARD_SIZE <= MAX_PERMITTED_DATA_INCREASE);
+    let mut t = fresh(0b0011);
+    t[seat_at(0) + K_FLAGS] |= F_COUNTED;
+    assert!(in_play(&t, 0));
+}
+
+#[test]
 fn a_seat_plays_with_its_smaran_key_or_its_session_key_only() {
     let mut t = fresh(0);
     t[T_PHASE] = PH_LOBBY;
