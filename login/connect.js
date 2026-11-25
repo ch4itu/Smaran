@@ -1,5 +1,5 @@
 /*! Smaran connect: players sign in with a name and a passphrase in Smaran's own window, so this site never sees the
- * passphrase or the key. https://github.com/ch4itu/MagicOver/tree/main/smaran (MIT). No dependencies.
+ * passphrase or the key. https://github.com/ch4itu/Smaran/tree/main/login (MIT). No dependencies.
  *
  *   button.onclick = async () => {
  *     const player = await SmaranConnect.connect();      // call it from a click, or the browser blocks the window
@@ -12,7 +12,7 @@
  */
 globalThis.SmaranConnect = (() => {
   'use strict';
-  const SIGNIN_URL = 'https://ch4itu.github.io/MagicOver/smaran/signin.html';
+  const SIGNIN_URL = 'https://ch4itu.github.io/Smaran/login/signin.html';
   let current = null; // one sign-in window at a time
 
   const fail = (message, code) => Object.assign(new Error('Smaran: ' + message), { code });

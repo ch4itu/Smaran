@@ -1,6 +1,6 @@
 # EternalBliss
 
-[Play it](https://ch4itu.github.io/MagicOver/eternalbliss/) · [Smaran version, with relics and the shared sign-in](https://ch4itu.github.io/MagicOver/blitz/eternalbliss/)
+[Play it](https://ch4itu.github.io/Smaran/eternalbliss/) · [Smaran version, with relics and the shared sign-in](https://ch4itu.github.io/Smaran/eternalbliss/)
 
 EternalBliss is an RPG in 3D or 2D. Its shared world and its duels run on Solana Devnet through MagicBlock's public Ephemeral Rollup, and players sign in with Smaran: the same username and password as Magic Over and the other Smaran apps.
 
@@ -15,7 +15,7 @@ EternalBliss is an RPG in 3D or 2D. Its shared world and its duels run on Solana
 
 - **For people who will never touch crypto,** and for places where buying or holding it is banned, restricted, heavily taxed or legally unclear. Players use a username and a password in any browser, on a phone or a computer. They never buy, hold or send any coin or token, there is no KYC step, and nothing has cash value: duels have no stakes. This is a design note, not legal advice.
 - **Who pays.** Players pay nothing, ever. Whoever runs the game pays the chain costs, mostly once as account deposits, to be covered by non-intrusive ads only, never anything that interrupts play. There are no ads in this demo, and the plan is not proven yet. Anyone can also send SOL to the [save fund](../programs/save-fund), which tops up the save reserves of the worlds, the character books and the Smaran login groups once they run low (see Saved to Solana above). It is a gift, not an investment: nothing comes back.
-- **How long it lasts.** As long as Solana and MagicBlock run, once the save fund has SOL, someone runs its refill script (anyone can, with a little SOL for fees) and our upgrade key is given up, which we plan for mainnet. No server: the page is static and open source, so anyone can host it. Worlds, character books and logins are stored on Solana with their storage paid up front. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](../blitz/README.md#built-to-outlive-us).
+- **How long it lasts.** As long as Solana and MagicBlock run, once the save fund has SOL, someone runs its refill script (anyone can, with a little SOL for fees) and our upgrade key is given up, which we plan for mainnet. No server: the page is static and open source, so anyone can host it. Worlds, character books and logins are stored on Solana with their storage paid up front. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](../BLITZ.md#built-to-outlive-us).
 
 ## How MagicBlock is used
 

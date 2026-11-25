@@ -5,7 +5,7 @@
 [![Built on MagicBlock](https://img.shields.io/badge/Rollups-MagicBlock-b33a2b)](https://docs.magicblock.gg)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**Try it:** [ch4itu.github.io/MagicOver/blitz](https://ch4itu.github.io/MagicOver/blitz/) · **Video:** [Smaran demo](https://ch4itu.github.io/MagicOver/media/smaran-blitz-demo.mp4) · **Blitz v10 judges:** [what we built this week](blitz/README.md#for-the-judges-magicblock-solana-blitz-v10)
+**Try it:** [ch4itu.github.io/Smaran](https://ch4itu.github.io/Smaran/) · **Video:** [Smaran demo](https://ch4itu.github.io/Smaran/media/smaran-blitz-demo.mp4) · **Blitz v10 judges:** [what we built this week](BLITZ.md#for-the-judges-magicblock-solana-blitz-v10)
 
 | At a glance | |
 | --- | --- |
@@ -78,7 +78,7 @@ Most people stop here                The same login works in every Smaran app
 3. On any device, the same username and password unlock it again, in the browser. No server ever sees the password.
 4. Apps then use that key on MagicBlock's rollups, where every action costs the person 0 SOL.
 
-Smaran is Sanskrit for remembering: all a person needs is to remember a username and a password. Full guide: [smaran/README.md](smaran/README.md).
+Smaran is Sanskrit for remembering: all a person needs is to remember a username and a password. Full guide: [login/README.md](login/README.md).
 
 ---
 
@@ -89,7 +89,7 @@ Bat against the computer or a friend. Hit a four or a six while signed in, win o
 
 | | |
 | --- | --- |
-| **Play** | [blitz/magic-over](https://ch4itu.github.io/MagicOver/blitz/magic-over/) |
+| **Play** | [magic-over](https://ch4itu.github.io/Smaran/magic-over/) |
 | **Read more** | [MAGIC_OVER.md](MAGIC_OVER.md) |
 | **Uses MagicBlock** | Every match on the private rollup, so the bowler's hidden variation stays hidden until the ball is played; VRF for the AI's choices |
 
@@ -98,7 +98,7 @@ Quests, battles, shared worlds and duels. Your relics show in its menu.
 
 | | |
 | --- | --- |
-| **Play** | [blitz/eternalbliss](https://ch4itu.github.io/MagicOver/blitz/eternalbliss/) |
+| **Play** | [eternalbliss](https://ch4itu.github.io/Smaran/eternalbliss/) |
 | **Read more** | [eternalbliss/README.md](eternalbliss/README.md) |
 | **Uses MagicBlock** | Shared worlds, duels and character books on the public rollup, saved to Solana every few minutes |
 
@@ -107,8 +107,8 @@ A shared world of villages in open country: fields, forests, hills, lakes, deser
 
 | | |
 | --- | --- |
-| **Play** | [blitz/smaranworld](https://ch4itu.github.io/MagicOver/blitz/smaranworld/) |
-| **Read more** | [blitz/smaranworld/README.md](blitz/smaranworld/README.md) |
+| **Play** | [smaranworld](https://ch4itu.github.io/Smaran/smaranworld/) |
+| **Read more** | [smaranworld/README.md](smaranworld/README.md) |
 | **Uses MagicBlock** | Where players stand, what they say and each village's sign, on the public rollup |
 
 ### 4. Ludo Freeflow: Ludo with no turns
@@ -116,7 +116,7 @@ Everyone rolls and moves at once. Pick a table online.
 
 | | |
 | --- | --- |
-| **Play** | [blitz/ludo-freeflow](https://ch4itu.github.io/MagicOver/blitz/ludo-freeflow/) |
+| **Play** | [ludo-freeflow](https://ch4itu.github.io/Smaran/ludo-freeflow/) |
 | **Read more** | [ludo-freeflow/README.md](ludo-freeflow/README.md) |
 | **Uses MagicBlock** | Tables on the public rollup; every die from VRF |
 
@@ -125,7 +125,7 @@ Keep up to three habits, one check-in a day. It shows the same login works for e
 
 | | |
 | --- | --- |
-| **Play** | [blitz/streaks](https://ch4itu.github.io/MagicOver/blitz/streaks/) |
+| **Play** | [streaks](https://ch4itu.github.io/Smaran/streaks/) |
 | **Read more** | [programs/streaks/README.md](programs/streaks/README.md) |
 | **Uses MagicBlock** | Check-ins on the public rollup, saved to Solana at most once an hour |
 
@@ -158,7 +158,7 @@ Each app's README has its own "How MagicBlock is used" section.
 | **How is that covered?** | Non-intrusive ads only: a sponsor's name on a stadium board or a village sign, never anything that interrupts play. There are no ads in this demo, and the plan is not proven yet. |
 | **Can others help?** | Yes. Anyone can send SOL to the [save fund](programs/save-fund), `9NLZkhdU3vG1kDi2RBW29pRyLcVW9MHSANWKMdE61myj`. It can only top up these apps' accounts when they run low, at most 0.1 SOL a day, and has no withdraw. It is a gift, not an investment: nothing comes back. |
 | **What if we stop?** | There is no server to switch off. The pages are static and open source, so anyone can host them. Logins and relics are on Solana, so people can still sign in and keep what they earned. |
-| **How long does it last?** | The aim is as long as Solana and MagicBlock run. That needs SOL in the save fund, someone to run its refill script (anyone can) and our upgrade key given up, which we plan for mainnet. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](blitz/README.md#built-to-outlive-us). |
+| **How long does it last?** | The aim is as long as Solana and MagicBlock run. That needs SOL in the save fund, someone to run its refill script (anyone can) and our upgrade key given up, which we plan for mainnet. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](BLITZ.md#built-to-outlive-us). |
 
 **Who it is for:** people who will never touch crypto, and places where buying or holding it is hard. People never buy, hold or send any coin or token, there is no KYC step, and nothing has cash value. This is a design note, not legal advice.
 
@@ -175,7 +175,7 @@ Each app's README has its own "How MagicBlock is used" section.
 | A fee on every action | 0 SOL for people, for every action on the rollups |
 | Progress in one app's database | Relics and records on Solana, under the person's own key |
 
-**What Smaran is not:** a wallet (its accounts hold no money) or proof of a unique person (one person can make many usernames). A forgotten password cannot be reset: that account is lost and the person starts a new one. More: [what Smaran is, and what it is not](smaran/README.md#what-smaran-is-and-what-it-is-not).
+**What Smaran is not:** a wallet (its accounts hold no money) or proof of a unique person (one person can make many usernames). A forgotten password cannot be reset: that account is lost and the person starts a new one. More: [what Smaran is, and what it is not](login/README.md#what-smaran-is-and-what-it-is-not).
 
 ---
 
@@ -200,13 +200,13 @@ Source for every program is in [`programs/`](programs) and [`eternalbliss/progra
 ## Quick Start
 
 ### For people
-Open [ch4itu.github.io/MagicOver/blitz](https://ch4itu.github.io/MagicOver/blitz/), pick any app, press **Sign in** and create an account. Use the same username and password in the other apps.
+Open [ch4itu.github.io/Smaran](https://ch4itu.github.io/Smaran/), pick any app, press **Sign in** and create an account. Use the same username and password in the other apps.
 
 ### For app builders
 Add Smaran's sign-in window to your page. Your site never sees the password or the key, and the person approves every signature in Smaran's window:
 
 ```html
-<script src="https://ch4itu.github.io/MagicOver/smaran/connect.js"></script>
+<script src="https://ch4itu.github.io/Smaran/login/connect.js"></script>
 <script>
   signInButton.onclick = async () => {
     const player = await SmaranConnect.connect(); // opens Smaran's sign-in window
@@ -217,7 +217,7 @@ Add Smaran's sign-in window to your page. Your site never sees the password or t
 </script>
 ```
 
-Everything else, including `smaran.js` for your own page: [smaran/README.md](smaran/README.md#add-it-to-your-app).
+Everything else, including `smaran.js` for your own page: [login/README.md](login/README.md#add-it-to-your-app).
 
 ---
 
@@ -225,12 +225,12 @@ Everything else, including `smaran.js` for your own page: [smaran/README.md](sma
 
 | Document | What it covers |
 | --- | --- |
-| [Smaran](smaran/README.md) | The login: how it works, how to add it, pros, cons and the numbers |
-| [Smaran for founders](smaran/FOUNDERS.md) | What Smaran means for an app's founders |
-| [Blitz v10 entry](blitz/README.md) | What we built this week, how to try it in two minutes, costs and limits |
+| [Smaran](login/README.md) | The login: how it works, how to add it, pros, cons and the numbers |
+| [Smaran for founders](login/FOUNDERS.md) | What Smaran means for an app's founders |
+| [Blitz v10 entry](BLITZ.md) | What we built this week, how to try it in two minutes, costs and limits |
 | [Magic Over](MAGIC_OVER.md) | The cricket game, its rules and how it uses MagicBlock |
 | [EternalBliss](eternalbliss/README.md) | The adventure game and its shared worlds |
-| [SmaranWorld](blitz/smaranworld/README.md) | The world of 144 villages and how its land is made |
+| [SmaranWorld](smaranworld/README.md) | The world of 144 villages and how its land is made |
 | [Ludo Freeflow](ludo-freeflow/README.md) | Ludo with no turns, and how an online match works |
 | [Smaran Streaks](programs/streaks/README.md) | The daily habit app and its rules |
 | [Relics](programs/play/README.md) | Relics and achievements |
@@ -254,7 +254,7 @@ Everything else, including `smaran.js` for your own page: [smaran/README.md](sma
 - **Not cheat-proof.** A modified page can still play badly or skip recording a result.
 - **Our upgrade key** can still change the programs' rules until we give it up at mainnet.
 
-More: [Blitz v10 limits](blitz/README.md#limits) and [Smaran's cons](smaran/README.md#cons).
+More: [Blitz v10 limits](BLITZ.md#limits) and [Smaran's cons](login/README.md#cons).
 
 ---
 
@@ -285,8 +285,10 @@ More: [Blitz v10 limits](blitz/README.md#limits) and [Smaran's cons](smaran/READ
 
 ## Hackathons
 
-- **MagicBlock Solana Blitz v10** (20 to 27 November 2026): relics, SmaranWorld, Ludo Freeflow online, Smaran Streaks and the save fund were built this week. [What is new and what is reused](blitz/README.md#for-the-judges-magicblock-solana-blitz-v10).
+- **MagicBlock Solana Blitz v10** (20 to 27 November 2026): relics, SmaranWorld, Ludo Freeflow online, Smaran Streaks and the save fund were built this week. [What is new and what is reused](BLITZ.md#for-the-judges-magicblock-solana-blitz-v10).
 - **MagicBlock Forge:** Smaran began here, with Magic Over.
+
+This repo moved here from [ch4itu/MagicOver](https://github.com/ch4itu/MagicOver) on 25 November 2026, with its full history. The old pages stay up.
 
 ---
 

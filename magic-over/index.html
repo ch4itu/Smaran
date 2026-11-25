@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#070b18">
 <title>Magic Over</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 /* Layout: full-bleed 3D stadium; broadcast-style score bug top left, control dock at the bottom, cards centred over a blurred stadium. */
 :root {
@@ -147,63 +145,1040 @@ details p, details li { color: var(--muted); font-size: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .banner, .toast { transition: none; } }
 </style>
-<link rel="stylesheet" href="./relics/relics.css">
+<style>.relic-controls { display:flex; gap:.5rem; flex-wrap:wrap; }
+.relic-controls button,.relic-dialog button { min-height:44px; }
+.relic-dialog { color:#fff3d2; background:#211d34; padding:1rem; border:2px solid #a97845; border-radius:8px;
+  box-sizing:border-box; width:min(36rem,calc(100vw - 32px)); max-height:85dvh; overflow:auto; overflow-wrap:anywhere; }
+.relic-dialog::backdrop { background:#10101bbb; }
+.relic-dialog button { margin:.3rem; }
+.relic-cards { padding:0; list-style:none; display:grid; gap:.5rem; }
+.relic-cards li { border:1px solid #a97845; padding:.6rem; border-radius:8px; }
+.relic-cards img { float:inline-end; margin:.25rem; }
+</style>
+<script>
+(() => {
+  var __defProp = Object.defineProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+
+  // relics/relics.mjs
+  var relics_exports = {};
+  __export(relics_exports, {
+    createRelicReader: () => createRelicReader,
+    mountRelicPanels: () => mountRelicPanels,
+    pointsByRarity: () => pointsByRarity,
+    rankedOwners: () => rankedOwners
+  });
+
+  // relics/reader.js
+  var DELEGATION_PROGRAM = "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh";
+  var LEDGER_MAGIC = "PPLEDGR1";
+  var VERSION = 1;
+  var KIND = {
+    REGISTRY: 0,
+    ACHIEVEMENTS: 1,
+    RELICS: 2
+  };
+  var SHARDS = 4;
+  var SHARD_SIZE = 10240;
+  var REGISTRY_SIZE = 512;
+  var HEADER = 16;
+  var ACH_SLOT = 96;
+  var ACH_PER = 106;
+  var REL_SLOT = 112;
+  var REL_PER = 91;
+  var GAME_MAGIC_OVER = "magic-over";
+  var ACH_SIX_HITTER = 1;
+  var FLAGS = {
+    0: "eligible",
+    1: "relic-requested",
+    2: "relic-minted"
+  };
+  var B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  function b58encode(bytes2) {
+    let zeros = 0;
+    while (zeros < bytes2.length && bytes2[zeros] === 0) zeros++;
+    let n = 0n;
+    for (const b of bytes2) n = n << 8n | BigInt(b);
+    let s = "";
+    while (n > 0n) {
+      s = B58[Number(n % 58n)] + s;
+      n /= 58n;
+    }
+    return "1".repeat(zeros) + s;
+  }
+  function b58decode(str) {
+    let zeros = 0;
+    while (zeros < str.length && str[zeros] === "1") zeros++;
+    let n = 0n;
+    for (const c of str) {
+      const i = B58.indexOf(c);
+      if (i < 0) throw new Error("invalid base58");
+      n = n * 58n + BigInt(i);
+    }
+    const out = [];
+    while (n > 0n) {
+      out.unshift(Number(n & 0xffn));
+      n >>= 8n;
+    }
+    return new Uint8Array([
+      ...new Array(zeros).fill(0),
+      ...out
+    ]);
+  }
+  function toHex(b) {
+    return [
+      ...b
+    ].map((x) => x.toString(16).padStart(2, "0")).join("");
+  }
+  function fromHex(h) {
+    const o = new Uint8Array(h.length / 2);
+    for (let i = 0; i < o.length; i++) o[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+    return o;
+  }
+  function b64decode(s) {
+    const bin = atob(s);
+    const o = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i);
+    return o;
+  }
+  var enc = new TextEncoder();
+  var dec = new TextDecoder();
+  function cat(...parts) {
+    const n = parts.reduce((a, p) => a + p.length, 0);
+    const o = new Uint8Array(n);
+    let k = 0;
+    for (const p of parts) {
+      o.set(p, k);
+      k += p.length;
+    }
+    return o;
+  }
+  async function sha256(...parts) {
+    return new Uint8Array(await crypto.subtle.digest("SHA-256", cat(...parts)));
+  }
+  var P = (1n << 255n) - 19n;
+  var D = 37095705934669439343138083508754565189542113879843219016388785533085940283555n;
+  function mod(a) {
+    const r = a % P;
+    return r >= 0n ? r : r + P;
+  }
+  function pow(b, e) {
+    let r = 1n;
+    b = mod(b);
+    while (e > 0n) {
+      if (e & 1n) r = mod(r * b);
+      b = mod(b * b);
+      e >>= 1n;
+    }
+    return r;
+  }
+  function isOnCurve(bytes2) {
+    if (bytes2.length !== 32) return false;
+    let y = 0n;
+    for (let i = 31; i >= 0; i--) y = y << 8n | BigInt(i === 31 ? bytes2[i] & 127 : bytes2[i]);
+    y = mod(y);
+    const u = mod(y * y - 1n);
+    const v = mod(D * y * y + 1n);
+    if (v === 0n) return false;
+    if (u === 0n) return true;
+    const x2 = mod(u * pow(v, P - 2n));
+    return pow(x2, (P - 1n) / 2n) === 1n;
+  }
+  async function findProgramAddress(seeds, programId) {
+    const pid = typeof programId === "string" ? b58decode(programId) : programId;
+    for (const s of seeds) if (s.length > 32) throw new Error("seed too long");
+    for (let bump = 255; bump >= 0; bump--) {
+      const h = await sha256(...seeds, new Uint8Array([
+        bump
+      ]), pid, enc.encode("ProgramDerivedAddress"));
+      if (!isOnCurve(h)) return {
+        address: h,
+        bump
+      };
+    }
+    throw new Error("no viable bump");
+  }
+  async function ledgerAddresses(programId) {
+    const out = {
+      registry: null,
+      achievements: [],
+      relics: []
+    };
+    out.registry = b58encode((await findProgramAddress([
+      enc.encode("play-reg")
+    ], programId)).address);
+    for (let i = 0; i < SHARDS; i++) {
+      out.achievements.push(b58encode((await findProgramAddress([
+        enc.encode("play-ach"),
+        new Uint8Array([
+          i
+        ])
+      ], programId)).address));
+      out.relics.push(b58encode((await findProgramAddress([
+        enc.encode("play-rel"),
+        new Uint8Array([
+          i
+        ])
+      ], programId)).address));
+    }
+    return out;
+  }
+  function u16(d, o) {
+    return d[o] | d[o + 1] << 8;
+  }
+  function u32(d, o) {
+    return (d[o] | d[o + 1] << 8 | d[o + 2] << 16 | d[o + 3] << 24) >>> 0;
+  }
+  function u64(d, o) {
+    return Number(BigInt(u32(d, o)) | BigInt(u32(d, o + 4)) << 32n);
+  }
+  function trimNul(b) {
+    let n = b.length;
+    while (n > 0 && b[n - 1] === 0) n--;
+    return dec.decode(b.slice(0, n));
+  }
+  function isZero(b) {
+    return b.every((x) => x === 0);
+  }
+  function header(d, kind, size, idx) {
+    if (!(d instanceof Uint8Array) || d.length !== size) throw new Error("BAD_LAYOUT: size");
+    if (dec.decode(d.slice(0, 8)) !== LEDGER_MAGIC) throw new Error("BAD_LAYOUT: magic");
+    if (d[9] !== VERSION) throw new Error("BAD_LAYOUT: version");
+    if (d[8] !== kind) throw new Error("BAD_LAYOUT: kind");
+    if (idx !== void 0 && d[10] !== idx) throw new Error("BAD_LAYOUT: index");
+    return {
+      unsaved: d[11] === 1
+    };
+  }
+  function parseRegistry(d) {
+    header(d, KIND.REGISTRY, REGISTRY_SIZE);
+    const games = [];
+    for (let i = 0; i < Math.min(d[49], 8); i++) {
+      const o = 64 + i * 49;
+      games.push({
+        id: trimNul(d.slice(o, o + 16)),
+        program: b58encode(d.slice(o + 16, o + 48)),
+        enabled: d[o + 48] === 1
+      });
+    }
+    const kinds2 = [];
+    for (let i = 0; i < Math.min(d[50], 8); i++) {
+      const o = 456 + i * 4;
+      kinds2.push({
+        kind: d[o],
+        rarity: d[o + 1],
+        basisPoints: u16(d, o + 2)
+      });
+    }
+    return {
+      admin: b58encode(d.slice(16, 48)),
+      oddsFrozen: d[48] === 1,
+      games,
+      kinds: kinds2
+    };
+  }
+  function parseAchievementShard(d, idx) {
+    const h = header(d, KIND.ACHIEVEMENTS, SHARD_SIZE, idx);
+    const items = [];
+    for (let s = 0; s < ACH_PER; s++) {
+      const o = HEADER + s * ACH_SLOT;
+      if (d[o] !== 1) continue;
+      items.push({
+        shard: idx,
+        slot: s,
+        state: FLAGS[d[o + 1]] ?? "unknown",
+        achievement: u16(d, o + 2),
+        game: trimNul(d.slice(o + 4, o + 20)),
+        player: b58encode(d.slice(o + 20, o + 52)),
+        matchNumber: u32(d, o + 52),
+        tableIndex: d[o + 56],
+        issuedAt: u64(d, o + 60),
+        requestSeq: u32(d, o + 68),
+        requestedAt: u64(d, o + 72)
+      });
+    }
+    return {
+      unsaved: h.unsaved,
+      items
+    };
+  }
+  function parseRelicShard(d, idx, includeMoved = false) {
+    const h = header(d, KIND.RELICS, SHARD_SIZE, idx);
+    const items = [];
+    for (let s = 0; s < REL_PER; s++) {
+      const o = HEADER + s * REL_SLOT;
+      if (includeMoved && d[o] > 2) throw new Error("Invalid relic state");
+      if (d[o] !== 1 && !(includeMoved && d[o] === 2)) continue;
+      const id = d.slice(o + 8, o + 40);
+      items.push({
+        shard: idx,
+        slot: s,
+        id: toHex(id),
+        kind: d[o + 1],
+        rarity: d[o + 2],
+        ...includeMoved ? {
+          moved: d[o] === 2
+        } : {},
+        transferCount: u32(d, o + 4),
+        owner: b58encode(d.slice(o + 40, o + 72)),
+        origin: b58encode(d.slice(o + 72, o + 104)),
+        mintedAt: u64(d, o + 104),
+        ownerIsZero: isZero(d.slice(o + 40, o + 72))
+      });
+    }
+    return {
+      unsaved: h.unsaved,
+      items
+    };
+  }
+  async function readLedger({ rpcUrl, programId, fetchImpl = globalThis.fetch, commitment = "confirmed", includeMoved = false }) {
+    const fail = (detail) => ({
+      status: "RPC_ERROR",
+      detail,
+      complete: false,
+      slot: null,
+      registry: null,
+      achievements: [],
+      relics: [],
+      accounts: [],
+      problems: []
+    });
+    const addrs = await ledgerAddresses(programId);
+    const keys = [
+      addrs.registry,
+      ...addrs.achievements,
+      ...addrs.relics
+    ];
+    let json;
+    try {
+      const r = await fetchImpl(rpcUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getMultipleAccounts",
+          params: [
+            keys,
+            {
+              encoding: "base64",
+              commitment
+            }
+          ]
+        })
+      });
+      if (!r.ok) return fail("HTTP " + r.status);
+      json = await r.json();
+    } catch (e) {
+      return fail(String(e && e.message ? e.message : e));
+    }
+    if (!json || json.error || !json.result || !Array.isArray(json.result.value) || json.result.value.length !== keys.length) {
+      return fail(json && json.error ? JSON.stringify(json.error) : "unexpected response");
+    }
+    const accounts = [];
+    const problems = [];
+    const out = {
+      status: "OK",
+      complete: false,
+      slot: json.result.context ? json.result.context.slot : null,
+      registry: null,
+      achievements: [],
+      relics: [],
+      accounts,
+      problems
+    };
+    const take = (i, label, parse) => {
+      const v = json.result.value[i];
+      if (!v) {
+        accounts.push({
+          address: keys[i],
+          label,
+          state: "NOT_FOUND"
+        });
+        problems.push({
+          label,
+          state: "NOT_FOUND"
+        });
+        return null;
+      }
+      const delegated = v.owner === DELEGATION_PROGRAM;
+      if (v.owner !== programId && !delegated) {
+        accounts.push({
+          address: keys[i],
+          label,
+          state: "WRONG_OWNER",
+          owner: v.owner
+        });
+        problems.push({
+          label,
+          state: "WRONG_OWNER",
+          owner: v.owner
+        });
+        return null;
+      }
+      try {
+        const parsed = parse(b64decode(v.data[0]));
+        accounts.push({
+          address: keys[i],
+          label,
+          state: "ok",
+          delegated,
+          unsaved: parsed.unsaved ?? false
+        });
+        return parsed;
+      } catch (e) {
+        accounts.push({
+          address: keys[i],
+          label,
+          state: "BAD_LAYOUT"
+        });
+        problems.push({
+          label,
+          state: "BAD_LAYOUT",
+          detail: String(e.message)
+        });
+        return null;
+      }
+    };
+    out.registry = take(0, "registry", (d) => ({
+      ...parseRegistry(d),
+      unsaved: d[11] === 1
+    }));
+    for (let i = 0; i < SHARDS; i++) {
+      const a = take(1 + i, "achievements-" + i, (d) => parseAchievementShard(d, i));
+      if (a) out.achievements.push(...a.items);
+      const r = take(1 + SHARDS + i, "relics-" + i, (d) => parseRelicShard(d, i, includeMoved));
+      if (r) out.relics.push(...r.items);
+    }
+    out.complete = problems.length === 0;
+    return out;
+  }
+
+  // relics/verify/vault.js
+  var enc2 = new TextEncoder();
+  var dec2 = new TextDecoder();
+  var zero = new Uint8Array(32);
+  var SYSTEM = "11111111111111111111111111111111";
+  var eq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  var view = (b) => new DataView(b.buffer, b.byteOffset, b.byteLength);
+  var field = (b, start, length) => b.subarray(start, start + length);
+  var appAccount = (account, programId) => account && account.executable === false && account.owner === programId;
+  var bytes = (account) => {
+    if (!Array.isArray(account?.data) || account.data[1] !== "base64") throw new Error("RPC account encoding");
+    return b64decode(account.data[0]);
+  };
+  async function vaultPageAddress(programId, owner, page) {
+    const key = b58decode(owner);
+    if (key.length !== 32 || eq(key, zero) || !Number.isInteger(page) || page < 0 || page > 4294967295) {
+      throw new Error("Invalid vault page coordinates");
+    }
+    const pageBytes = new Uint8Array(4);
+    view(pageBytes).setUint32(0, page, true);
+    return b58encode((await findProgramAddress([
+      enc2.encode("play-vault-v4"),
+      key,
+      pageBytes
+    ], programId)).address);
+  }
+  async function relicIndexAddress(programId, id) {
+    if (id.length !== 32 || eq(id, zero)) throw new Error("Invalid relic ID");
+    return b58encode((await findProgramAddress([
+      enc2.encode("play-relic-v4"),
+      id
+    ], programId)).address);
+  }
+  function parseIndex(account, programId, id) {
+    if (!appAccount(account, programId)) throw new Error("Unexpected vault index owner");
+    const d = bytes(account);
+    if (d.length !== 136 || dec2.decode(field(d, 0, 8)) !== "PRLX0004" || d[12] >= 4 || view(d).getUint16(13, true) >= REL_PER || d[15] !== 0 || d[24] !== 1 || !eq(field(d, 32, 32), id) || eq(field(d, 64, 32), zero)) {
+      throw new Error("Invalid vault index");
+    }
+    return {
+      d,
+      owner: b58encode(field(d, 64, 32)),
+      page: view(d).getUint32(8, true),
+      shard: d[12],
+      legacySlot: view(d).getUint16(13, true),
+      revision: view(d).getBigUint64(16, true)
+    };
+  }
+  function matchingLegacy(accounts, programId, id) {
+    const matches = [];
+    for (const [shard, a] of accounts.entries()) {
+      if (!appAccount(a, programId) && !appAccount(a, DELEGATION_PROGRAM)) throw new Error("Missing or unrecognized legacy shard");
+      const d = bytes(a);
+      if (d.length !== SHARD_SIZE || dec2.decode(field(d, 0, 8)) !== "PPLEDGR1" || d[8] !== 2 || d[9] !== 1 || d[10] !== shard) throw new Error("Invalid legacy shard");
+      for (let slot = 0; slot < REL_PER; slot++) {
+        const row = field(d, HEADER + slot * REL_SLOT, REL_SLOT);
+        if (row[0] > 2) throw new Error("Unrecognized legacy relic state");
+        if (row[0] && eq(field(row, 8, 32), id)) {
+          matches.push({
+            shard,
+            slot,
+            row,
+            delegated: a.owner === DELEGATION_PROGRAM
+          });
+        }
+      }
+    }
+    if (matches.length > 1) throw new Error("Ambiguous legacy relic lineage");
+    return matches[0];
+  }
+  async function verifyRelicOwnership({ programId, rpcUrl, relicId, fetchImpl = fetch, minContextSlot = 0 }) {
+    let slot = minContextSlot;
+    try {
+      if (!Number.isSafeInteger(slot) || slot < 0 || !/^[a-f0-9]{64}$/i.test(relicId) || b58decode(programId).length !== 32) throw new Error("Invalid verifier input");
+      const id = fromHex(relicId);
+      const [legacy, index] = await Promise.all([
+        ledgerAddresses(programId),
+        relicIndexAddress(programId, id)
+      ]);
+      const read = async (keys2) => {
+        const response = await fetchImpl(rpcUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          signal: AbortSignal.timeout(8e3),
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getMultipleAccounts",
+            params: [
+              keys2,
+              {
+                encoding: "base64",
+                commitment: "finalized",
+                minContextSlot: slot
+              }
+            ]
+          })
+        });
+        if (!response.ok) throw new Error("RPC HTTP " + response.status);
+        const { result, error } = await response.json();
+        if (error || !Array.isArray(result?.value) || result.value.length !== keys2.length || !Number.isSafeInteger(result.context?.slot) || result.context.slot < slot) throw new Error("Incomplete or stale RPC response");
+        slot = result.context.slot;
+        return result.value;
+      };
+      const keys = [
+        index,
+        ...legacy.relics
+      ];
+      const [first, ...shards] = await read(keys);
+      if (first === null || appAccount(first, SYSTEM) && bytes(first).length === 0) {
+        const old2 = matchingLegacy(shards, programId, id);
+        if (!old2) return {
+          status: "NOT_FOUND",
+          slot
+        };
+        if (old2.row[0] !== 1 || eq(field(old2.row, 40, 32), zero)) throw new Error("Legacy record has no valid ownership index");
+        return {
+          status: "OWNED",
+          source: "legacy-committed",
+          slot,
+          owner: b58encode(field(old2.row, 40, 32)),
+          delegated: old2.delegated
+        };
+      }
+      const hint = parseIndex(first, programId, id);
+      const pageKey = await vaultPageAddress(programId, hint.owner, hint.page);
+      const [current, ...state] = await read([
+        ...keys,
+        pageKey
+      ]);
+      const pageAccount = state.pop();
+      const vault = parseIndex(current, programId, id);
+      if (vault.owner !== hint.owner || vault.page !== hint.page || vault.revision !== hint.revision) throw new Error("Ownership changed during verification. Retry.");
+      const old = matchingLegacy(state, programId, id);
+      if (!old || old.row[0] !== 2 || old.shard !== vault.shard || old.slot !== vault.legacySlot || !eq(field(old.row, 72, 40), field(vault.d, 96, 40)) || !eq(field(old.row, 1, 3), field(vault.d, 25, 3)) || BigInt(view(old.row).getUint32(4, true)) + vault.revision !== BigInt(view(vault.d).getUint32(28, true)) || vault.revision === 0n && !eq(field(old.row, 40, 32), field(vault.d, 64, 32))) throw new Error("Legacy relocation evidence disagrees");
+      if (!appAccount(pageAccount, programId)) throw new Error("Missing or unrecognized vault page");
+      const page = bytes(pageAccount);
+      if (page.length !== 112 || dec2.decode(field(page, 0, 8)) !== "PVLT0004" || b58encode(field(page, 8, 32)) !== vault.owner || view(page).getUint32(40, true) !== vault.page || view(page).getUint32(44, true) !== 0 || Number(eq(field(page, 48, 32), id)) + Number(eq(field(page, 80, 32), id)) !== 1) throw new Error("Vault page disagrees with ownership index");
+      return {
+        status: "OWNED",
+        source: "vault-finalized",
+        slot,
+        owner: vault.owner,
+        index,
+        page: pageKey,
+        revision: vault.revision.toString(),
+        relicId: toHex(id)
+      };
+    } catch (error) {
+      return {
+        status: "UNVERIFIED",
+        reason: String(error?.message ?? error)
+      };
+    }
+  }
+
+  // relics/art.js
+  var RARITY = [
+    "#8a8f98",
+    "#3f9b6e",
+    "#3d6fd1",
+    "#c9962b"
+  ];
+  var byte = (hex, i) => parseInt(hex.slice(i * 2, i * 2 + 2), 16) || 0;
+  function relicSvg({ id, kind, rarity }, size = 120) {
+    if (!/^[0-9a-f]{64}$/.test(id)) throw new Error("bad relic id");
+    const k = Number.isInteger(kind) ? kind : 0;
+    const colour = RARITY[Math.min(Math.max(rarity | 0, 0), 3)];
+    const dots = [];
+    for (let i = 0; i < 12; i++) {
+      const a = Math.PI * 2 * i / 12;
+      const r = 3 + byte(id, i) % 5;
+      dots.push(`<circle cx="${(60 + 48 * Math.cos(a)).toFixed(1)}" cy="${(60 + 48 * Math.sin(a)).toFixed(1)}" r="${r}" fill="${colour}" opacity="0.55"/>`);
+    }
+    const hue = byte(id, 20) * 360 / 256;
+    const core = `hsl(${hue.toFixed(0)} 55% 62%)`;
+    const shapes = {
+      1: `<path d="M60 26c16 18 22 30 22 42a22 22 0 0 1-44 0c0-12 6-24 22-42z" fill="${core}"/>`,
+      2: `<circle cx="60" cy="60" r="26" fill="none" stroke="${core}" stroke-width="6"/><path d="M60 34l8 26-8 26-8-26z" fill="${core}"/>`,
+      3: `<path d="M34 78c0-26 8-40 26-40s26 14 26 40z" fill="${core}"/><circle cx="60" cy="84" r="6" fill="${core}"/>`,
+      4: `<path d="M60 30l8 20 22 2-17 14 6 22-19-12-19 12 6-22-17-14 22-2z" fill="${core}"/>`
+    };
+    const body = shapes[k] || `<rect x="38" y="38" width="44" height="44" rx="8" fill="${core}"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="${size}" height="${size}" role="img" aria-label="relic"><rect width="120" height="120" rx="22" fill="#14161c"/><circle cx="60" cy="60" r="54" fill="none" stroke="${colour}" stroke-width="3"/>${dots.join("")}${body}</svg>`;
+  }
+
+  // relics/relics.mjs
+  var pointsByRarity = Object.freeze([
+    1,
+    2,
+    4,
+    8
+  ]);
+  var kinds = Object.freeze({
+    1: "Ember",
+    2: "Compass",
+    3: "Bell",
+    4: "Crest"
+  });
+  var zeroKey = "11111111111111111111111111111111";
+  var panelSerial = 0;
+  function rankedOwners(relics) {
+    const owners = /* @__PURE__ */ new Map();
+    const ids = /* @__PURE__ */ new Set();
+    for (const relic of relics) {
+      if (ids.has(relic.id)) throw new Error("Duplicate relic in finalized records.");
+      ids.add(relic.id);
+      const row = owners.get(relic.owner) ?? {
+        owner: relic.owner,
+        points: 0,
+        count: 0
+      };
+      row.points += relic.points;
+      row.count++;
+      owners.set(relic.owner, row);
+    }
+    return [
+      ...owners.values()
+    ].sort((a, b) => b.points - a.points || (a.owner < b.owner ? -1 : Number(a.owner > b.owner)));
+  }
+  function createRelicReader({ programId, rpcUrl, fetchImpl = globalThis.fetch }) {
+    let lastSlot = 0;
+    return async function finalizedRelics() {
+      const finalizedFetch = (url, options) => fetchImpl(url, {
+        ...options,
+        redirect: "error",
+        signal: AbortSignal.timeout(8e3)
+      });
+      const ledger = await readLedger({
+        programId,
+        rpcUrl,
+        commitment: "finalized",
+        includeMoved: true,
+        fetchImpl: finalizedFetch
+      });
+      if (!ledger.complete || !Number.isSafeInteger(ledger.slot) || ledger.slot < lastSlot) {
+        throw new Error("Finalized ownership is unavailable. Try again.");
+      }
+      const ids = /* @__PURE__ */ new Set(), relics = [];
+      let slot = ledger.slot;
+      for (const entry of ledger.relics) {
+        const points = pointsByRarity[entry.rarity], name = kinds[entry.kind];
+        if (!points || !name || /^0{64}$/.test(entry.id) || ids.has(entry.id)) {
+          throw new Error("Finalized relic records disagree.");
+        }
+        ids.add(entry.id);
+        let owner = entry.owner;
+        if (entry.moved) {
+          const ver = await verifyRelicOwnership({
+            programId,
+            rpcUrl,
+            relicId: entry.id,
+            fetchImpl: finalizedFetch,
+            minContextSlot: slot
+          });
+          if (ver.status !== "OWNED" || ver.source !== "vault-finalized") throw new Error("Vault ownership is unavailable.");
+          owner = ver.owner;
+          slot = ver.slot;
+        }
+        if (owner === zeroKey) throw new Error("Finalized relic has no owner.");
+        relics.push({
+          ...entry,
+          owner,
+          points,
+          name,
+          originGame: "Magic Over"
+        });
+      }
+      if (ledger.slot < lastSlot) throw new Error("Finalized ownership changed during refresh. Try again.");
+      lastSlot = slot;
+      return {
+        relics,
+        rankings: rankedOwners(relics),
+        achievements: ledger.achievements,
+        slot
+      };
+    };
+  }
+  function mountRelicPanels({ root, read, currentPlayer, signIn, give }) {
+    const doc = root.ownerDocument;
+    const make = (tag, text) => {
+      const el = doc.createElement(tag);
+      if (text) el.textContent = text;
+      return el;
+    };
+    const controls = make("div");
+    controls.className = "relic-controls";
+    const mine = make("button", "My relics");
+    const ranking = make("button", "Relic leaderboard");
+    mine.type = ranking.type = "button";
+    const dialog = make("dialog"), heading = make("h2", "Relics");
+    dialog.className = "relic-dialog";
+    heading.id = "relic-panel-title-" + ++panelSerial;
+    dialog.setAttribute("aria-labelledby", heading.id);
+    const status = make("p"), body = make("div"), close = make("button", "Close"), refresh = make("button", "Refresh");
+    status.setAttribute("role", "status");
+    close.type = refresh.type = "button";
+    dialog.append(heading, status, body, refresh, close);
+    controls.append(mine, ranking, dialog);
+    root.append(controls);
+    let generation = 0, mode;
+    close.onclick = () => dialog.close();
+    dialog.addEventListener("close", () => {
+      generation++;
+      body.replaceChildren();
+    });
+    function render(data, publicKey) {
+      if (mode === "leaderboard") {
+        if (!data.rankings.length) {
+          status.textContent = "No finalized relics yet.";
+          return;
+        }
+        const list2 = make("ol");
+        for (const row of data.rankings) {
+          const text = (row.owner === publicKey ? "You \xB7 " : "") + row.owner + " \xB7 " + row.points + " pts";
+          list2.append(make("li", text));
+        }
+        body.append(list2);
+        return;
+      }
+      const owned = data.relics.filter((relic) => relic.owner === publicKey);
+      status.textContent = owned.length ? owned.length + " verified collectible" + (owned.length === 1 ? "" : "s") : "No collectible yet.";
+      const list = make("ul");
+      list.className = "relic-cards";
+      for (const relic of owned) {
+        const card = make("li"), art = make("img");
+        art.src = "data:image/svg+xml," + encodeURIComponent(relicSvg(relic, 64));
+        art.alt = relic.name;
+        art.width = art.height = 64;
+        card.append(art, make("h3", relic.name + " \xB7 " + relic.points + " pts"), make("p", "Earned in " + relic.originGame), make("p", "Finalized owner \xB7 " + relic.owner));
+        if (give) card.append(giveControls(relic, publicKey));
+        list.append(card);
+      }
+      body.append(list);
+      const history = data.achievements.filter((a) => a.player === publicKey && a.achievement === ACH_SIX_HITTER && a.game === GAME_MAGIC_OVER);
+      if (history.length) {
+        const section = make("section"), entries = make("ul");
+        section.append(make("h3", "Lifetime achievements"), entries);
+        for (const a of history) entries.append(make("li", "Boundary Hitter \xB7 Magic Over match " + a.matchNumber));
+        body.append(section);
+      }
+    }
+    function giveControls(relic, publicKey) {
+      const box = make("div"), start = make("button", "Give");
+      box.className = "relic-give";
+      start.type = "button";
+      box.append(start);
+      start.onclick = () => {
+        const field = make("input"), next = make("button", "Next"), cancel = make("button", "Cancel");
+        field.placeholder = "Player name";
+        field.setAttribute("aria-label", "Player name");
+        next.type = cancel.type = "button";
+        box.replaceChildren(field, next, cancel);
+        field.focus();
+        cancel.onclick = () => box.replaceChildren(start);
+        next.onclick = async () => {
+          const name = field.value.trim();
+          if (!name) return;
+          next.disabled = true;
+          status.textContent = "Finding " + name + "\u2026";
+          let to;
+          try { to = await give.find(name); } catch (e) { to = null; }
+          next.disabled = false;
+          if (!to) { status.textContent = "No player named " + name + "."; return; }
+          if (to.key === publicKey) { status.textContent = "That is you."; return; }
+          status.textContent = "";
+          const ask = make("p", "Give this relic to " + to.name + "?"), yes = make("button", "Give"), no = make("button", "Cancel");
+          yes.type = no.type = "button";
+          box.replaceChildren(ask, yes, no);
+          no.onclick = () => box.replaceChildren(start);
+          yes.onclick = async () => {
+            yes.disabled = no.disabled = true;
+            try {
+              const r = await give.send(relic, to.key, (t) => { status.textContent = t; });
+              status.textContent = r.saved ? "Given to " + to.name + ". Saved on Solana." : "Given to " + to.name + ". Solana is still finalizing; Refresh in a minute.";
+              box.replaceChildren(make("p", "Now kept by " + to.name + "."));
+            } catch (e) {
+              status.textContent = e && e.message || String(e);
+              yes.disabled = no.disabled = false;
+            }
+          };
+        };
+      };
+      return box;
+    }
+    async function load() {
+      const request = ++generation, player = currentPlayer();
+      body.replaceChildren();
+      if (mode === "mine" && !player) {
+        status.textContent = "Sign in to see your relics.";
+        return;
+      }
+      status.textContent = "Checking finalized ownership\u2026";
+      try {
+        const data = await read();
+        if (request !== generation || !dialog.open || player !== currentPlayer()) return;
+        status.textContent = "";
+        render(data, player);
+      } catch {
+        if (request === generation && dialog.open) status.textContent = "Could not verify ownership on Solana Devnet. Select Refresh to try again.";
+      }
+    }
+    function open(next) {
+      mode = next;
+      heading.textContent = next === "mine" ? "My relics" : "Relic leaderboard";
+      dialog.showModal();
+      void load();
+    }
+    mine.onclick = () => {
+      if (signIn && !currentPlayer()) signIn();
+      else open("mine");
+    };
+    ranking.onclick = () => open("leaderboard");
+    refresh.onclick = () => void load();
+    return {
+      openMine: () => open("mine"),
+      reset() {
+        if (dialog.open) dialog.close();
+        generation++;
+        body.replaceChildren();
+      }
+    };
+  }
+
+  // main.mjs
+  globalThis.smaranRelics = relics_exports;
+})();
+
+</script>
+<style>
+#battingGuide {grid-column:1/-1}
+#battingGuide button {width:100%;min-height:48px;background:#ffd88a;color:#211608}
+#battingGuide .arrival-track {display:block;height:6px;background:#5a5247;overflow:hidden}
+#battingGuide .arrival-fill {display:block;height:100%;background:#ffd88a;transform-origin:left;transform:scaleX(0)}
+#battingGuide p {margin:.25rem 0;font-size:.84rem}
+</style><link rel="stylesheet" href="../arcade.css">
+<style id="smaran-arcade">
+  /* Smaran arcade look: paper panels, pixel type and ink borders over the 3D stadium. The stadium itself is unchanged. */
+  :root { color-scheme: light; --night: var(--px-paper); --panel: var(--px-paper); --panel-solid: var(--px-paper); --line: var(--px-ink); --text: var(--px-ink); --muted: var(--px-ink-2); --saffron: var(--px-red); --teal: var(--px-green); --gold: var(--px-gold); --red: var(--px-red); --display: var(--px-head); --body: var(--px-body); }
+  html, body { font-family: var(--px-body); font-size: 20px; -webkit-font-smoothing: none; }
+  button { font-family: var(--px-head) !important; font-size: 10px; font-weight: 400 !important; letter-spacing: 0 !important; text-transform: uppercase; color: var(--px-ink) !important; background: var(--px-paper) !important; background-image: none !important; border: 3px solid var(--px-ink) !important; border-radius: 0 !important; box-shadow: 3px 3px 0 var(--px-ink) !important; text-shadow: none !important; }
+  button:hover { background: var(--px-paper-2) !important; }
+  button:active { transform: translate(3px, 3px); box-shadow: none !important; }
+  button.primary { background: var(--px-green) !important; color: var(--px-paper) !important; }
+  button.teal { background: var(--px-blue) !important; color: var(--px-paper) !important; }
+  button.link { background: none !important; border: 0 !important; box-shadow: none !important; text-decoration: underline; text-underline-offset: 4px; }
+  input { font-family: var(--px-body) !important; font-size: 22px !important; color: var(--px-ink) !important; background: #fff !important; border: 3px solid var(--px-ink) !important; border-radius: 0 !important; }
+  input:focus { outline: 3px solid var(--px-gold) !important; }
+  label { font-family: var(--px-head) !important; font-size: 9px !important; text-transform: uppercase; color: var(--px-ink) !important; }
+  .muted, .msg, details p, details li { color: var(--px-ink-2) !important; }
+  .card, #finishCard, .leaderboard-card { color: var(--px-ink) !important; background: var(--px-paper) !important; background-image: none !important; border: 4px solid var(--px-ink) !important; border-radius: 0 !important; box-shadow: 6px 6px 0 var(--px-ink) !important; backdrop-filter: none !important; }
+  .eyebrow { font-family: var(--px-head) !important; font-size: 8px !important; letter-spacing: 0 !important; color: var(--px-red) !important; }
+  h1 { font-family: var(--px-head) !important; font-weight: 400 !important; letter-spacing: 0 !important; line-height: 1.3 !important; color: var(--px-ink) !important; text-shadow: 3px 3px 0 var(--px-gold) !important; background: none !important; -webkit-text-fill-color: currentColor !important; }
+  h1 span { color: var(--px-red) !important; -webkit-text-fill-color: var(--px-red) !important; background: none !important; }
+  h2 { font-family: var(--px-head) !important; font-weight: 400 !important; font-size: 13px !important; line-height: 1.6 !important; text-transform: uppercase; letter-spacing: 0 !important; color: var(--px-red) !important; }
+  .facts div { background: var(--px-paper-2) !important; border: 3px solid var(--px-ink) !important; border-radius: 0 !important; box-shadow: none !important; }
+  .facts b { font-family: var(--px-head) !important; font-weight: 400 !important; color: var(--px-red) !important; }
+  .facts small { color: var(--px-ink-2) !important; }
+  .badge { font-family: var(--px-head) !important; font-size: 8px !important; letter-spacing: 0 !important; color: var(--px-ink) !important; background: var(--px-paper-2) !important; border: 2px solid var(--px-ink) !important; border-radius: 0 !important; }
+  .tabs { gap: 8px !important; }
+  .tabs button { color: var(--px-ink-2) !important; background: var(--px-paper-2) !important; box-shadow: none !important; min-height: 44px; }
+  .tabs button.on { background: var(--px-ink) !important; color: var(--px-paper) !important; }
+  details { border-color: var(--px-ink) !important; border-radius: 0 !important; }
+  summary { font-family: var(--px-head); font-size: 9px; text-transform: uppercase; color: var(--px-ink) !important; }
+  #home a, .homeFoot a { color: var(--px-blue) !important; }
+  /* match HUD */
+  .bug, .corner button, .ping, #matchCode, .dock, #matchStatus, .toast, #target, .vs, .vsMini { color: var(--px-ink) !important; background: var(--px-paper) !important; background-image: none !important; border: 3px solid var(--px-ink) !important; border-radius: 0 !important; box-shadow: 3px 3px 0 var(--px-ink) !important; backdrop-filter: none !important; text-shadow: none !important; }
+  .so, .bat .nm, .sub, #overs, .scoreLine { color: var(--px-ink) !important; }
+  #score, #overs, .bat .nm, .so { font-family: var(--px-head) !important; letter-spacing: 0 !important; }
+  .bat .nm em { color: var(--px-red) !important; }
+  #strip .b { border-radius: 0 !important; border: 2px solid var(--px-ink) !important; }
+  #batPad button, #pitchMap button, .seg button { border-radius: 0 !important; }
+  #batPad button small { font-family: var(--px-body) !important; font-size: 16px !important; text-transform: none; color: var(--px-ink-2) !important; }
+  #batPad button.picked, #pitchMap button.on, .seg button.on { background: var(--px-gold) !important; color: var(--px-ink) !important; }
+  #batPad button.picked small { color: var(--px-ink) !important; }
+  #bowlGo { background: var(--px-green) !important; color: var(--px-paper) !important; }
+  .banner .big { font-family: var(--px-head) !important; font-weight: 400 !important; letter-spacing: 0 !important; color: var(--px-paper) !important; background: none !important; -webkit-text-fill-color: currentColor !important; -webkit-text-stroke: 0 !important; text-shadow: 5px 5px 0 var(--px-ink) !important; }
+  .banner.six .big, .banner.four .big { color: var(--px-gold) !important; }
+  .banner.out .big { color: var(--px-red) !important; }
+  .banner .small, .banner .reveal { font-family: var(--px-head) !important; letter-spacing: 0 !important; color: var(--px-paper) !important; text-shadow: 2px 2px 0 var(--px-ink) !important; }
+  .toast.bad { background: var(--px-red) !important; color: var(--px-paper) !important; }
+  .leaderboard-table th { font-family: var(--px-head) !important; font-size: 8px !important; color: var(--px-paper) !important; background: var(--px-ink) !important; }
+  .leaderboard-table td, .leaderboard-table small { color: var(--px-ink) !important; }
+  .leaderboard-table .you td, .leaderboard-table tr.you { background: var(--px-gold) !important; }
+  /* sizes: the pixel face is wide, so text that the old condensed face fitted needs smaller sizes */
+  button { font-size: 11px !important; line-height: 1.5 !important; }
+  .tabs button { font-size: 9px !important; }
+  #batPad button { font-size: 12px !important; }
+  .facts b { font-size: 13px !important; line-height: 1.4 !important; }
+  .facts small { font-family: var(--px-body) !important; font-size: 17px !important; }
+  #score { font-size: 20px !important; line-height: 1.2 !important; }
+  .so, #overs { font-size: 10px !important; }
+  .bat .nm { font-size: 9px !important; line-height: 1.5 !important; }
+  .sub, #target { font-family: var(--px-head) !important; font-size: 9px !important; letter-spacing: 0 !important; }
+  #matchStatus { font-family: var(--px-body) !important; font-size: 19px !important; font-weight: 400 !important; }
+  .banner .big { font-size: clamp(34px, 9vw, 64px) !important; line-height: 1.2 !important; }
+  .banner .small, .banner .reveal { font-size: 10px !important; line-height: 1.6 !important; }
+  /* calmer home and a cricket-scoreboard HUD (clutter removed at the owner's request) */
+  #home .card { max-width: 420px !important; }
+  #home h1 { font-size: clamp(30px, 8vw, 44px) !important; margin: 6px 0 10px !important; }
+  #home .tag { font-family: var(--px-body); font-size: 22px; margin: 0 0 18px; color: var(--px-ink); }
+  #home .stack { gap: 14px !important; }
+  #home .stack button { font-size: 12px !important; padding: 14px 12px !important; }
+  .homeLinks { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 16px 0 6px; }
+#home .relicRule { font-family: var(--px-body); font-size: 19px; line-height: 1.15; margin: 0 0 10px; color: var(--px-ink-2); }
+#home .relicRule b { color: var(--px-red); font-weight: 400; font-family: var(--px-head); font-size: 9px; text-transform: uppercase; }
+#home .homeAccount { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; padding: 6px 0; border-top: 3px solid var(--px-ink); border-bottom: 3px solid var(--px-ink); font-family: var(--px-body); font-size: 19px; color: var(--px-ink); }
+#home .homeAccount span { min-width: 0; overflow-wrap: anywhere; }
+#home .homeSign { flex: none; width: auto !important; min-height: 40px; padding: 8px 12px !important; font-size: 9px !important; }
+  .homeLinks .relic-controls { display: contents; }
+  .homeLinks button, #relicFinish .relic-controls button { background: none !important; border: 0 !important; box-shadow: none !important; padding: 6px 0 !important; min-height: 0 !important; font-size: 9px !important; text-decoration: underline; text-underline-offset: 4px; }
+  #home details { margin-top: 8px; }
+  #home details li, #home details p { font-size: 19px; }
+  .homeFoot { margin-top: 14px; display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; }
+  .bug { background: var(--px-ink) !important; color: var(--px-paper) !important; border: 4px solid var(--px-ink) !important; box-shadow: 4px 4px 0 var(--px-gold) !important; }
+  .bug .so, #ping { display: none !important; }
+  @media (min-width: 641px) { .vsMini { display: none !important; } }
+  .bug .bat .nm, .bug #overs, .bug .vs, .bug .vs b, .bug .sub, .bug #target, .bug .scoreLine { color: var(--px-paper) !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }
+  .bug #score { color: var(--px-gold) !important; font-size: 26px !important; }
+  .bug .bat .nm em { color: var(--px-green) !important; }
+  #strip .b { background: var(--px-paper) !important; color: var(--px-ink) !important; border: 2px solid var(--px-paper) !important; }
+  #strip .b.e { background: transparent !important; border: 2px dashed var(--px-ink-2) !important; }
+  #strip .b.w { background: var(--px-red) !important; color: var(--px-paper) !important; border-color: var(--px-red) !important; }
+  #strip .b.bd { background: var(--px-gold) !important; color: var(--px-ink) !important; border-color: var(--px-gold) !important; }
+  #matchCode { background: var(--px-ink) !important; color: var(--px-gold) !important; }
+  #batPad button { font-size: 11px !important; min-height: 48px !important; }
+  #battingGuide p { font-family: var(--px-body) !important; font-size: 18px !important; color: var(--px-ink-2) !important; }
+  #battingGuide .arrival-track { background: var(--px-paper-2) !important; border: 2px solid var(--px-ink) !important; height: 10px !important; }
+  #battingGuide .arrival-fill { background: var(--px-gold) !important; }
+  #battingGuide button { background: var(--px-gold) !important; color: var(--px-ink) !important; }
+  #relicHome { display: contents; }
+  .homeLinks { justify-content: flex-start; }
+  .homeFoot a { font-family: var(--px-body) !important; font-size: 19px !important; }
+  .bug .bugMain, .bug .bat, .bug .scoreLine { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+  .bug .bat .nm { color: var(--px-paper) !important; }
+  .homeLinks button { width: auto !important; display: inline-block !important; margin: 0 !important; }
+  /* compact: the home menu is a short strip at the bottom, the batting panel is three slim rows */
+  #home.card-screen { place-items: end center !important; }
+  #home .card { width: min(600px, 100%) !important; max-width: none !important; padding: 14px 16px 12px !important; max-height: 60dvh !important; }
+  #home h1 { font-size: 22px !important; line-height: 1.3 !important; margin: 0 0 4px !important; text-shadow: 2px 2px 0 var(--px-gold) !important; }
+  #home .tag { font-size: 20px; margin: 0 0 8px; }
+  #home .stack { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 10px !important; margin-top: 6px !important; }
+  #home .stack button { font-size: 9px !important; padding: 11px 4px !important; line-height: 1.5 !important; }
+  .homeLinks { margin: 10px 0 0 !important; gap: 0 14px !important; }
+  #home details { margin-top: 4px !important; padding-top: 4px !important; }
+  #home summary { font-size: 8px !important; }
+  .homeFoot { margin-top: 6px !important; }
+  .homeFoot .badge { font-size: 7px !important; }
+  .dock { padding-top: 8px !important; gap: 6px !important; }
+  #matchStatus { font-family: var(--px-body) !important; font-size: 20px !important; line-height: 1.15 !important; padding: 4px 8px !important; }
+  #batPad { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; gap: 6px !important; }
+  #batPad button { padding: 10px 2px !important; font-size: 8px !important; min-height: 40px !important; }
+  #battingGuide { display: grid; gap: 6px; }
+  #battingGuide button { min-height: 40px !important; padding: 8px !important; }
+  #home details.more { margin-top: 10px !important; border-top: 0 !important; padding-top: 0 !important; }
+  #home details.more > summary { font-size: 9px !important; color: var(--px-ink) !important; }
+  #home details.more[open] { max-height: 34dvh; overflow: auto; }
+  @media (max-width: 640px) { .vsMini { display: block !important; color: var(--px-paper) !important; background: transparent !important; border: 0 !important; box-shadow: none !important; font-family: var(--px-body) !important; font-size: 16px !important; } .vsMini b { color: var(--px-gold) !important; font-family: var(--px-body) !important; font-size: 16px !important; } }
+</style>
 </head>
 <body>
 <canvas id="stage" aria-label="3D cricket stadium"></canvas>
 
 <section id="home" class="screen card-screen" hidden>
   <div class="card">
-    <div class="eyebrow">Magic Over · real-time cricket</div>
     <h1>Magic <span>Over</span></h1>
-    <p class="muted">Achievements preview. You can play Magic Over here. Recording and drawing collectibles are awaiting the preview sponsor.</p>
-    <p class="muted"><a href="../preview-smarancity/">Open SmaranCity</a></p>
-    <p class="muted">Six balls. Two wickets. The bowler hides the swing on MagicBlock's private rollup, and you have one tap to read it. Every ball is a transaction signed by you, and you never need SOL.</p>
-    <div class="facts"><div><b>0 SOL</b><small>per player</small></div><div><b>10 ms</b><small>timing slots</small></div><div><b>Hidden</b><small>swing and slower balls</small></div></div>
+    <p class="tag">Six balls. Two wickets.</p>
+    <p class="relicRule" id="relicRule"><b>Relic:</b> hit one four or six in any match (Bat vs AI, Full match or a friend), win or lose. Sign in before the match to claim it.</p>
+    <div class="homeAccount"><span id="homeWho">Not signed in</span><button id="btnHomeSign" class="homeSign" type="button">Sign in</button></div>
     <div class="stack">
-      <button id="btnAi" class="primary" type="button">Bat vs AI · no sign-up</button>
-      <button id="btnFull" class="soft" type="button">Full match vs AI · no sign-up</button>
+      <button id="btnAi" class="primary" type="button">Bat vs AI</button>
       <button id="btnFriend" class="teal" type="button">Play a friend</button>
-      <button id="btnLeaderboard" type="button">Leaderboard</button>
+      <button id="btnFull" class="soft" type="button">Full match</button>
     </div>
-    <button id="btnWatch" class="link" type="button">Watch a live match</button>
-    <details>
-      <summary>How to play</summary>
-      <ul>
-        <li>The ball shows its pace, line and length. Swing, cut and slower balls stay hidden until you play.</li>
-        <li>Tap a shot as the ball reaches the bat: Defend, Drive, Cut, Pull, Loft, or Leave. Keys: ↓ defend, Space drive, ← cut, → pull, ↑ loft, L leave.</li>
-        <li>Timing is judged on-chain: within 60 ms is perfect, 130 ms good, 240 ms an edge, beyond that you miss.</li>
-        <li>Each side bats one over with two wickets. A tie goes to another Super Over.</li>
-        <li>Full match vs AI: bat one over against the AI, then bowl one at it. The AI never sees your hidden variation.</li>
-      </ul>
+    <details class="more">
+      <summary>More</summary>
+      <div class="homeLinks">
+        <button id="btnLeaderboard" class="link" type="button">Leaderboard</button>
+        <div id="relicHome"></div>
+        <button id="btnWatch" class="link" type="button">Watch live</button>
+      </div>
+      <details>
+        <summary>How to play</summary>
+        <ul>
+          <li>Six balls, two wickets. Bat vs AI needs no sign-up. To earn a relic, sign in before the match and hit one four or six in any match (Bat vs AI, Full match or a friend), win or lose, then claim it on the result screen. A guest's four or six cannot be claimed. A fair random draw by MagicBlock (VRF) picks which relic you get.</li>
+          <li>You see each ball's pace, line and length, as a real batter would. Its variation (swing, spin or a slower ball) stays hidden from the batter and from anyone watching until the ball is played: it is kept on MagicBlock's private rollup, where only the bowler can read it. The Swing bar fills on the normal arrival time, so a slower ball arrives after it.</li>
+          <li>Tap a shot as the ball reaches the bat: Defend, Drive, Cut, Pull, Loft or Leave. Keys: down defend, Space drive, left cut, right pull, up loft, L leave.</li>
+          <li>Your timing is judged by the game's program, not by your browser: within 60 ms is perfect, 130 ms good, 240 ms an edge, beyond that you miss.</li>
+          <li>Each side bats one over. A tie goes to another Super Over. Full match vs AI: bat one over, then bowl one.</li>
+        </ul>
+      </details>
+      <details>
+        <summary>About</summary>
+        <p>Anyone can play with just a username and a password: no wallet, no seed phrase and no crypto. Every ball is checked by the game's program in 10 ms steps, on MagicBlock's private rollup, so both players are judged the same way. The login is <a href="../login/">Smaran</a>, and other apps can use it too.</p>
+        <p>Runs on Solana's test network (Devnet). No bets, coins or prizes. Made by ch4itu with help from AI tools. Open source under the MIT licence.</p>
+      </details>
+      <div class="homeFoot">
+        <span class="badge" id="netBadge">Checking the private rollup…</span>
+        <a href="../">All Smaran apps</a>
+        <a href="https://github.com/ch4itu/Smaran" target="_blank" rel="noopener">Source code</a>
+      </div>
     </details>
-    <details>
-      <summary>About</summary>
-      <p>Magic Over shows that anyone can start using a Solana app with just a player name and a passphrase: no wallet, no seed phrase and no SOL. The sign-up is called <a href="smaran/">Smaran</a>, and other apps can use it too.</p>
-      <p>It runs on Solana Devnet, a test network, with MagicBlock's Ephemeral Rollups. There are no wagers, tokens or prizes.</p>
-      <p>Made by ch4itu with help from AI tools. Open source under the MIT licence.</p>
-    </details>
-    <div class="homeFoot">
-      <span class="badge" id="netBadge">Checking the private rollup…</span>
-      <a href="ludo-freeflow/">Play Ludo Freeflow</a>
-      <a href="https://github.com/ch4itu/MagicOver" target="_blank" rel="noopener">Source code ↗</a>
-    </div>
   </div>
 </section>
 
 <section id="auth" class="screen card-screen" hidden>
   <div class="card">
-    <div class="eyebrow">Your Magic Over player ID</div>
-    <h2>Name and password</h2>
-    <p class="muted">Choose a name and a strong password. No wallet app, seed phrase or SOL is needed. This browser creates your key and stores only an encrypted recovery copy in the player registry on MagicBlock.</p>
-    <div class="tabs"><button id="authTabIn" class="on" type="button">Sign in</button><button id="authTabNew" type="button">New player</button></div>
+    <h2 id="authTitle">Sign in</h2>
+    <p class="muted">One username and password for every app with Smaran login. No wallet, no seed phrase, no crypto.</p>
+    <div class="tabs" role="tablist"><button id="authTabIn" class="on" type="button" role="tab" aria-selected="true">Sign in</button><button id="authTabNew" type="button" role="tab" aria-selected="false">Create account</button></div>
     <form id="authForm" data-mode="in" autocomplete="on">
-      <label for="authName">Player name</label>
-      <input id="authName" name="username" autocomplete="username" spellcheck="false" autocapitalize="none" required placeholder="username">
+      <label for="authName">Username</label>
+      <input id="authName" name="username" autocomplete="username" spellcheck="false" autocapitalize="none" required placeholder="Letters, digits, _ or -">
       <label for="authPassword">Password</label>
-      <input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="16">
+      <input id="authPassword" name="password" type="password" autocomplete="current-password" required minlength="16" placeholder="At least 16 characters">
       <div id="confirmRow" hidden><label for="authConfirm">Confirm password</label><input id="authConfirm" name="new-password" type="password" autocomplete="new-password" minlength="16"></div>
-      <div class="stack"><button id="authGo" class="teal" type="submit">Sign in</button><button type="button" data-back="home">Back</button></div>
+      <p id="authResetNote" class="muted" hidden>There is no password reset, so choose one you will remember.</p>
+      <div class="stack"><button id="authGo" class="primary" type="submit">Sign in</button><button type="button" data-back="home">Not now</button></div>
       <div id="authMsg" class="msg" role="status"></div>
     </form>
   </div>
@@ -223,7 +1198,7 @@ details p, details li { color: var(--muted); font-size: 14px; }
     <div id="relicLobby"></div>
     <label>Open matches</label>
     <div id="openList"></div>
-    <div class="stack"><button type="button" data-back="home">Back</button></div>
+    <div class="stack"><button type="button" data-back="home">Back</button><button type="button" id="btnSignOut">Sign out</button></div>
   </div>
 </section>
 
@@ -243,7 +1218,7 @@ details p, details li { color: var(--muted); font-size: 14px; }
     <div class="eyebrow">Magic Over · friend matches</div>
     <h2>Leaderboard</h2>
     <p class="muted">Updates automatically every 5 seconds while open. Returns to the latest results when you switch back to this tab.</p>
-    <p class="muted">Recorded friend-match totals stay when match tables are reused. They are shared across devices and saved back to Solana Devnet. Saving status is shown below.</p>
+    <p class="muted">Totals from friend matches. They are the same on every device and are saved on Solana's test network; the line below shows the saving.</p>
     <p class="muted">Win: 3 points · Draw: 1 · Loss: 0. Ties in points use wins, then player key. AI practice is separate. No entry fees or prizes.</p>
     <p class="muted">Runs off the bat, 4s, 6s and wickets taken count friend matches from 7 November 2026. Earlier results show only in W, L and D.</p>
     <p id="leaderboardStatus" class="muted" role="status"></p>
@@ -266,12 +1241,17 @@ details p, details li { color: var(--muted); font-size: 14px; }
   <div class="dock">
     <div id="matchStatus" role="status"></div>
     <div id="batPad" hidden>
-      <button type="button" data-shot="0">Defend<small>↓</small></button>
-      <button type="button" data-shot="1">Drive<small>Space</small></button>
-      <button type="button" data-shot="2">Cut<small>←</small></button>
-      <button type="button" data-shot="3">Pull<small>→</small></button>
-      <button type="button" data-shot="4">Loft<small>↑</small></button>
-      <button type="button" data-shot="5">Leave<small>L</small></button>
+      <div id="battingGuide" hidden>
+        <p hidden>Tap Swing as the bar fills. A slower ball arrives later.</p>
+        <span class="arrival-track" aria-hidden="true"><span class="arrival-fill"></span></span>
+        <button type="button">Swing</button>
+      </div>
+      <button type="button" data-shot="0">Defend</button>
+      <button type="button" data-shot="1">Drive</button>
+      <button type="button" data-shot="2">Cut</button>
+      <button type="button" data-shot="3">Pull</button>
+      <button type="button" data-shot="4">Loft</button>
+      <button type="button" data-shot="5">Leave</button>
     </div>
     <div id="bowlPad" hidden>
       <div class="mapWrap">
@@ -294,6 +1274,8 @@ details p, details li { color: var(--muted); font-size: 14px; }
       <div class="eyebrow">Result</div>
       <h2 id="finishTitle">Match over</h2>
       <div id="finishLines" class="muted"></div>
+      <p id="sixHitterResult" class="muted" hidden></p>
+      <button id="claimSix" type="button" class="primary" hidden>Claim Boundary Hitter relic</button>
       <div id="relicFinish"></div>
       <p id="rematchStatus" class="muted" role="status"></p>
       <p id="leaderboardSave" class="muted" role="status"></p>
@@ -328,7 +1310,7 @@ var solanaWeb3=function(exports){"use strict";function getDefaultExportFromCjs(x
 
 </script>
 <script>/* chainkey */
-(()=>{function T(A,I,g,B){function C(Q){return Q instanceof g?Q:new g(function(E){E(Q)})}return new(g||(g=Promise))(function(Q,E){function i(c){try{F(B.next(c))}catch(e){E(e)}}function o(c){try{F(B.throw(c))}catch(e){E(e)}}function F(c){c.done?Q(c.value):C(c.value).then(i,o)}F((B=B.apply(A,I||[])).next())})}var s=class{constructor(){this.mutex=Promise.resolve()}lock(){let I=()=>{};return this.mutex=this.mutex.then(()=>new Promise(I)),new Promise(g=>{I=g})}dispatch(I){return T(this,void 0,void 0,function*(){let g=yield this.lock();try{return yield Promise.resolve(I())}finally{g()}})}},wA;function wI(){return typeof globalThis<"u"?globalThis:typeof self<"u"?self:typeof window<"u"?window:global}var yA=wI(),rA=(wA=yA.Buffer)!==null&&wA!==void 0?wA:null,rI=yA.TextEncoder?new yA.TextEncoder:null;function LA(A,I){return(A&15)+(A>>6|A>>3&8)<<4|(I&15)+(I>>6|I>>3&8)}function ZA(A,I){let g=I.length>>1;for(let B=0;B<g;B++){let C=B<<1;A[B]=LA(I.charCodeAt(C),I.charCodeAt(C+1))}}function fI(A,I){if(A.length!==I.length*2)return!1;for(let g=0;g<I.length;g++){let B=g<<1;if(I[g]!==LA(A.charCodeAt(B),A.charCodeAt(B+1)))return!1}return!0}var XA=87,mA=48;function dA(A,I,g){let B=0;for(let C=0;C<g;C++){let Q=I[C]>>>4;A[B++]=Q>9?Q+XA:Q+mA,Q=I[C]&15,A[B++]=Q>9?Q+XA:Q+mA}return String.fromCharCode.apply(null,A)}var b=rA!==null?A=>{if(typeof A=="string"){let I=rA.from(A,"utf8");return new Uint8Array(I.buffer,I.byteOffset,I.length)}if(rA.isBuffer(A))return new Uint8Array(A.buffer,A.byteOffset,A.length);if(ArrayBuffer.isView(A))return new Uint8Array(A.buffer,A.byteOffset,A.byteLength);throw new Error("Invalid data type!")}:A=>{if(typeof A=="string")return rI.encode(A);if(ArrayBuffer.isView(A))return new Uint8Array(A.buffer,A.byteOffset,A.byteLength);throw new Error("Invalid data type!")},O="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",CA=new Uint8Array(256);for(let A=0;A<O.length;A++)CA[O.charCodeAt(A)]=A;function xA(A,I=!0){let g=A.length,B=g%3,C=[],Q=g-B;for(let E=0;E<Q;E+=3){let i=(A[E]<<16&16711680)+(A[E+1]<<8&65280)+(A[E+2]&255),o=O.charAt(i>>18&63)+O.charAt(i>>12&63)+O.charAt(i>>6&63)+O.charAt(i&63);C.push(o)}if(B===1){let E=A[g-1],i=O.charAt(E>>2),o=O.charAt(E<<4&63);C.push(`${i}${o}`),I&&C.push("==")}else if(B===2){let E=(A[g-2]<<8)+A[g-1],i=O.charAt(E>>10),o=O.charAt(E>>4&63),F=O.charAt(E<<2&63);C.push(`${i}${o}${F}`),I&&C.push("=")}return C.join("")}function kI(A){let I=Math.floor(A.length*.75),g=A.length;return A[g-1]==="="&&(I-=1,A[g-2]==="="&&(I-=1)),I}function yI(A){let I=kI(A),g=A.length,B=new Uint8Array(I),C=0;for(let Q=0;Q<g;Q+=4){let E=CA[A.charCodeAt(Q)],i=CA[A.charCodeAt(Q+1)],o=CA[A.charCodeAt(Q+2)],F=CA[A.charCodeAt(Q+3)];B[C]=E<<2|i>>4,C+=1,B[C]=(i&15)<<4|o>>2,C+=1,B[C]=(o&3)<<6|F&63,C+=1}return B}var cA=16*1024,QA=4,dI=new s,fA=new Map;function OA(A,I){return T(this,void 0,void 0,function*(){let g=null,B=null,C=!1;if(typeof WebAssembly>"u")throw new Error("WebAssembly is not supported in this environment!");let Q=(a,w=0)=>{B.set(a,w)},E=()=>B,i=()=>g.exports,o=a=>{g.exports.Hash_SetMemorySize(a);let w=g.exports.Hash_GetBuffer(),G=g.exports.memory.buffer;B=new Uint8Array(G,w,a)},F=()=>new DataView(g.exports.memory.buffer).getUint32(g.exports.STATE_SIZE,!0),c=dI.dispatch(()=>T(this,void 0,void 0,function*(){if(!fA.has(A.name)){let w=yI(A.data),G=WebAssembly.compile(w);fA.set(A.name,G)}let a=yield fA.get(A.name);g=yield WebAssembly.instantiate(a,{})})),e=()=>T(this,void 0,void 0,function*(){g||(yield c);let a=g.exports.Hash_GetBuffer(),w=g.exports.memory.buffer;B=new Uint8Array(w,a,cA)}),D=(a=null)=>{C=!0,g.exports.Hash_Init(a)},k=a=>{let w=0;for(;w<a.length;){let G=a.subarray(w,w+cA);w+=G.length,B.set(G),g.exports.Hash_Update(G.length)}},t=a=>{if(!C)throw new Error("update() called before init()");let w=b(a);k(w)},y=new Uint8Array(I*2),r=(a,w=null)=>{if(!C)throw new Error("digest() called before init()");return C=!1,g.exports.Hash_Final(w),a==="binary"?B.slice(0,I):dA(y,B,I)},d=()=>{if(!C)throw new Error("save() can only be called after init() and before digest()");let a=g.exports.Hash_GetState(),w=F(),G=g.exports.memory.buffer,H=new Uint8Array(G,a,w),U=new Uint8Array(QA+w);return ZA(U,A.hash),U.set(H,QA),U},f=a=>{if(!(a instanceof Uint8Array))throw new Error("load() expects an Uint8Array generated by save()");let w=g.exports.Hash_GetState(),G=F(),H=QA+G,U=g.exports.memory.buffer;if(a.length!==H)throw new Error(`Bad state length (expected ${H} bytes, got ${a.length})`);if(!fI(A.hash,a.subarray(0,QA)))throw new Error("This state was written by an incompatible hash implementation");let J=a.subarray(QA);new Uint8Array(U,w,G).set(J),C=!0},S=a=>typeof a=="string"?a.length<cA/4:a.byteLength<cA,N=S;switch(A.name){case"argon2":case"scrypt":N=()=>!0;break;case"blake2b":case"blake2s":N=(a,w)=>w<=512&&S(a);break;case"blake3":N=(a,w)=>w===0&&S(a);break;case"xxhash64":case"xxhash3":case"xxhash128":case"crc64":N=()=>!1;break}let x=(a,w=null,G=null)=>{if(!N(a,w))return D(w),t(a),r("hex",G);let H=b(a);return B.set(H),g.exports.Hash_Calculate(H.length,w,G),dA(y,B,I)};return yield e(),{getMemory:E,writeMemory:Q,getExports:i,setMemorySize:o,init:D,update:t,digest:r,save:d,load:f,calculate:x,hashLength:I}})}var og=new s;var GI="argon2",HI="AGFzbQEAAAABKQVgAX8Bf2AAAX9gEH9/f39/f39/f39/f39/f38AYAR/f39/AGACf38AAwYFAAECAwQFBgEBAoCAAgYIAX8BQZCoBAsHQQQGbWVtb3J5AgASSGFzaF9TZXRNZW1vcnlTaXplAAAOSGFzaF9HZXRCdWZmZXIAAQ5IYXNoX0NhbGN1bGF0ZQAECvEyBVgBAn9BACEBAkAgAEEAKAKICCICRg0AAkAgACACayIAQRB2IABBgIB8cSAASWoiAEAAQX9HDQBB/wHADwtBACEBQQBBACkDiAggAEEQdK18NwOICAsgAcALcAECfwJAQQAoAoAIIgANAEEAPwBBEHQiADYCgAhBACgCiAgiAUGAgCBGDQACQEGAgCAgAWsiAEEQdiAAQYCAfHEgAElqIgBAAEF/Rw0AQQAPC0EAQQApA4gIIABBEHStfDcDiAhBACgCgAghAAsgAAvcDgECfiAAIAQpAwAiECAAKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAMIBAgDCkDAIVCIIkiEDcDACAIIBAgCCkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgBCAQIAQpAwCFQiiJIhA3AwAgACAQIAApAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAwgECAMKQMAhUIwiSIQNwMAIAggECAIKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAEIBAgBCkDAIVCAYk3AwAgASAFKQMAIhAgASkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDSAQIA0pAwCFQiCJIhA3AwAgCSAQIAkpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAUgECAFKQMAhUIoiSIQNwMAIAEgECABKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACANIBAgDSkDAIVCMIkiEDcDACAJIBAgCSkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBSAQIAUpAwCFQgGJNwMAIAIgBikDACIQIAIpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIA4gECAOKQMAhUIgiSIQNwMAIAogECAKKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAGIBAgBikDAIVCKIkiEDcDACACIBAgAikDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgDiAQIA4pAwCFQjCJIhA3AwAgCiAQIAopAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAYgECAGKQMAhUIBiTcDACADIAcpAwAiECADKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAPIBAgDykDAIVCIIkiEDcDACALIBAgCykDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgByAQIAcpAwCFQiiJIhA3AwAgAyAQIAMpAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIA8gECAPKQMAhUIwiSIQNwMAIAsgECALKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAHIBAgBykDAIVCAYk3AwAgACAFKQMAIhAgACkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDyAQIA8pAwCFQiCJIhA3AwAgCiAQIAopAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAUgECAFKQMAhUIoiSIQNwMAIAAgECAAKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAPIBAgDykDAIVCMIkiEDcDACAKIBAgCikDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBSAQIAUpAwCFQgGJNwMAIAEgBikDACIQIAEpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAwgECAMKQMAhUIgiSIQNwMAIAsgECALKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAGIBAgBikDAIVCKIkiEDcDACABIBAgASkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgDCAQIAwpAwCFQjCJIhA3AwAgCyAQIAspAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAYgECAGKQMAhUIBiTcDACACIAcpAwAiECACKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACANIBAgDSkDAIVCIIkiEDcDACAIIBAgCCkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgByAQIAcpAwCFQiiJIhA3AwAgAiAQIAIpAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIA0gECANKQMAhUIwiSIQNwMAIAggECAIKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAHIBAgBykDAIVCAYk3AwAgAyAEKQMAIhAgAykDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDiAQIA4pAwCFQiCJIhA3AwAgCSAQIAkpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAQgECAEKQMAhUIoiSIQNwMAIAMgECADKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAOIBAgDikDAIVCMIkiEDcDACAJIBAgCSkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBCAQIAQpAwCFQgGJNwMAC98aAQN/QQAhBEEAIAIpAwAgASkDAIU3A5AIQQAgAikDCCABKQMIhTcDmAhBACACKQMQIAEpAxCFNwOgCEEAIAIpAxggASkDGIU3A6gIQQAgAikDICABKQMghTcDsAhBACACKQMoIAEpAyiFNwO4CEEAIAIpAzAgASkDMIU3A8AIQQAgAikDOCABKQM4hTcDyAhBACACKQNAIAEpA0CFNwPQCEEAIAIpA0ggASkDSIU3A9gIQQAgAikDUCABKQNQhTcD4AhBACACKQNYIAEpA1iFNwPoCEEAIAIpA2AgASkDYIU3A/AIQQAgAikDaCABKQNohTcD+AhBACACKQNwIAEpA3CFNwOACUEAIAIpA3ggASkDeIU3A4gJQQAgAikDgAEgASkDgAGFNwOQCUEAIAIpA4gBIAEpA4gBhTcDmAlBACACKQOQASABKQOQAYU3A6AJQQAgAikDmAEgASkDmAGFNwOoCUEAIAIpA6ABIAEpA6ABhTcDsAlBACACKQOoASABKQOoAYU3A7gJQQAgAikDsAEgASkDsAGFNwPACUEAIAIpA7gBIAEpA7gBhTcDyAlBACACKQPAASABKQPAAYU3A9AJQQAgAikDyAEgASkD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",UI="e4cdc523",SI={name:GI,data:HI,hash:UI},NI="blake2b",JI="AGFzbQEAAAABEQRgAAF/YAJ/fwBgAX8AYAAAAwoJAAECAwECAgABBQQBAQICBg4CfwFBsIsFC38AQYAICwdwCAZtZW1vcnkCAA5IYXNoX0dldEJ1ZmZlcgAACkhhc2hfRmluYWwAAwlIYXNoX0luaXQABQtIYXNoX1VwZGF0ZQAGDUhhc2hfR2V0U3RhdGUABw5IYXNoX0NhbGN1bGF0ZQAIClNUQVRFX1NJWkUDAQrTOAkFAEGACQvrAgIFfwF+AkAgAUEBSA0AAkACQAJAIAFBgAFBACgC4IoBIgJrIgNKDQAgASEEDAELQQBBADYC4IoBAkAgAkH/AEoNACACQeCJAWohBSAAIQRBACEGA0AgBSAELQAAOgAAIARBAWohBCAFQQFqIQUgAyAGQQFqIgZB/wFxSg0ACwtBAEEAKQPAiQEiB0KAAXw3A8CJAUEAQQApA8iJASAHQv9+Vq18NwPIiQFB4IkBEAIgACADaiEAAkAgASADayIEQYEBSA0AIAIgAWohBQNAQQBBACkDwIkBIgdCgAF8NwPAiQFBAEEAKQPIiQEgB0L/flatfDcDyIkBIAAQAiAAQYABaiEAIAVBgH9qIgVBgAJLDQALIAVBgH9qIQQMAQsgBEEATA0BC0EAIQUDQCAFQQAoAuCKAWpB4IkBaiAAIAVqLQAAOgAAIAQgBUEBaiIFQf8BcUoNAAsLQQBBACgC4IoBIARqNgLgigELC78uASR+QQBBACkD0IkBQQApA7CJASIBQQApA5CJAXwgACkDICICfCIDhULr+obav7X2wR+FQiCJIgRCq/DT9K/uvLc8fCIFIAGFQiiJIgYgA3wgACkDKCIBfCIHIASFQjCJIgggBXwiCSAGhUIBiSIKQQApA8iJAUEAKQOoiQEiBEEAKQOIiQF8IAApAxAiA3wiBYVCn9j52cKR2oKbf4VCIIkiC0K7zqqm2NDrs7t/fCIMIASFQiiJIg0gBXwgACkDGCIEfCIOfCAAKQNQIgV8Ig9BACkDwIkBQQApA6CJASIQQQApA4CJASIRfCAAKQMAIgZ8IhKFQtGFmu/6z5SH0QCFQiCJIhNCiJLznf/M+YTqAHwiFCAQhUIoiSIVIBJ8IAApAwgiEHwiFiAThUIwiSIXhUIgiSIYQQApA9iJAUEAKQO4iQEiE0EAKQOYiQF8IAApAzAiEnwiGYVC+cL4m5Gjs/DbAIVCIIkiGkLx7fT4paf9p6V/fCIbIBOFQiiJIhwgGXwgACkDOCITfCIZIBqFQjCJIhogG3wiG3wiHSAKhUIoiSIeIA98IAApA1giCnwiDyAYhUIwiSIYIB18Ih0gDiALhUIwiSIOIAx8Ih8gDYVCAYkiDCAWfCAAKQNAIgt8Ig0gGoVCIIkiFiAJfCIaIAyFQiiJIiAgDXwgACkDSCIJfCIhIBaFQjCJIhYgGyAchUIBiSIMIAd8IAApA2AiB3wiDSAOhUIgiSIOIBcgFHwiFHwiFyAMhUIoiSIbIA18IAApA2giDHwiHCAOhUIwiSIOIBd8IhcgG4VCAYkiGyAZIBQgFYVCAYkiFHwgACkDcCINfCIVIAiFQiCJIhkgH3wiHyAUhUIoiSIUIBV8IAApA3giCHwiFXwgDHwiIoVCIIkiI3wiJCAbhUIoiSIbICJ8IBJ8IiIgFyAYIBUgGYVCMIkiFSAffCIZIBSFQgGJIhQgIXwgDXwiH4VCIIkiGHwiFyAUhUIoiSIUIB98IAV8Ih8gGIVCMIkiGCAXfCIXIBSFQgGJIhR8IAF8IiEgFiAafCIWIBUgHSAehUIBiSIaIBx8IAl8IhyFQiCJIhV8Ih0gGoVCKIkiGiAcfCAIfCIcIBWFQjCJIhWFQiCJIh4gGSAOIBYgIIVCAYkiFiAPfCACfCIPhUIgiSIOfCIZIBaFQiiJIhYgD3wgC3wiDyAOhUIwiSIOIBl8Ihl8IiAgFIVCKIkiFCAhfCAEfCIhIB6FQjCJIh4gIHwiICAiICOFQjCJIiIgJHwiIyAbhUIBiSIbIBx8IAp8IhwgDoVCIIkiDiAXfCIXIBuFQiiJIhsgHHwgE3wiHCAOhUIwiSIOIBkgFoVCAYkiFiAffCAQfCIZICKFQiCJIh8gFSAdfCIVfCIdIBaFQiiJIhYgGXwgB3wiGSAfhUIwiSIfIB18Ih0gFoVCAYkiFiAVIBqFQgGJIhUgD3wgBnwiDyAYhUIgiSIYICN8IhogFYVCKIkiFSAPfCADfCIPfCAHfCIihUIgiSIjfCIkIBaFQiiJIhYgInwgBnwiIiAjhUIwiSIjICR8IiQgFoVCAYkiFiAOIBd8Ig4gDyAYhUIwiSIPICAgFIVCAYkiFCAZfCAKfCIXhUIgiSIYfCIZIBSFQiiJIhQgF3wgC3wiF3wgBXwiICAPIBp8Ig8gHyAOIBuFQgGJIg4gIXwgCHwiGoVCIIkiG3wiHyAOhUIoiSIOIBp8IAx8IhogG4VCMIkiG4VCIIkiISAdIB4gDyAVhUIBiSIPIBx8IAF8IhWFQiCJIhx8Ih0gD4VCKIkiDyAVfCADfCIVIByFQjCJIhwgHXwiHXwiHiAWhUIoiSIWICB8IA18IiAgIYVCMIkiISAefCIeIBogFyAYhUIwiSIXIBl8IhggFIVCAYkiFHwgCXwiGSAchUIgiSIaICR8IhwgFIVCKIkiFCAZfCACfCIZIBqFQjCJIhogHSAPhUIBiSIPICJ8IAR8Ih0gF4VCIIkiFyAbIB98Iht8Ih8gD4VCKIkiDyAdfCASfCIdIBeFQjCJIhcgH3wiHyAPhUIBiSIPIBsgDoVCAYkiDiAVfCATfCIVICOFQiCJIhsgGHwiGCAOhUIoiSIOIBV8IBB8IhV8IAx8IiKFQiCJIiN8IiQgD4VCKIkiDyAifCAHfCIiICOFQjCJIiMgJHwiJCAPhUIBiSIPIBogHHwiGiAVIBuFQjCJIhUgHiAWhUIBiSIWIB18IAR8IhuFQiCJIhx8Ih0gFoVCKIkiFiAbfCAQfCIbfCABfCIeIBUgGHwiFSAXIBogFIVCAYkiFCAgfCATfCIYhUIgiSIXfCIaIBSFQiiJIhQgGHwgCXwiGCAXhUIwiSIXhUIgiSIgIB8gISAVIA6FQgGJIg4gGXwgCnwiFYVCIIkiGXwiHyAOhUIoiSIOIBV8IA18IhUgGYVCMIkiGSAffCIffCIhIA+FQiiJIg8gHnwgBXwiHiAghUIwiSIgICF8IiEgGyAchUIwiSIbIB18IhwgFoVCAYkiFiAYfCADfCIYIBmFQiCJIhkgJHwiHSAWhUIoiSIWIBh8IBJ8IhggGYVCMIkiGSAfIA6FQgGJIg4gInwgAnwiHyAbhUIgiSIbIBcgGnwiF3wiGiAOhUIoiSIOIB98IAZ8Ih8gG4VCMIkiGyAafCIaIA6FQgGJIg4gFSAXIBSFQgGJIhR8IAh8IhUgI4VCIIkiFyAcfCIcIBSFQiiJIhQgFXwgC3wiFXwgBXwiIoVCIIkiI3wiJCAOhUIoiSIOICJ8IAh8IiIgGiAgIBUgF4VCMIkiFSAcfCIXIBSFQgGJIhQgGHwgCXwiGIVCIIkiHHwiGiAUhUIoiSIUIBh8IAZ8IhggHIVCMIkiHCAafCIaIBSFQgGJIhR8IAR8IiAgGSAdfCIZIBUgISAPhUIBiSIPIB98IAN8Ih2FQiCJIhV8Ih8gD4VCKIkiDyAdfCACfCIdIBWFQjCJIhWFQiCJIiEgFyAbIBkgFoVCAYkiFiAefCABfCIZhUIgiSIbfCIXIBaFQiiJIhYgGXwgE3wiGSAbhUIwiSIbIBd8Ihd8Ih4gFIVCKIkiFCAgfCAMfCIgICGFQjCJIiEgHnwiHiAiICOFQjCJIiIgJHwiIyAOhUIBiSIOIB18IBJ8Ih0gG4VCIIkiGyAafCIaIA6FQiiJIg4gHXwgC3wiHSAbhUIwiSIbIBcgFoVCAYkiFiAYfCANfCIXICKFQiCJIhggFSAffCIVfCIfIBaFQiiJIhYgF3wgEHwiFyAYhUIwiSIYIB98Ih8gFoVCAYkiFiAVIA+FQgGJIg8gGXwgCnwiFSAchUIgiSIZICN8IhwgD4VCKIkiDyAVfCAHfCIVfCASfCIihUIgiSIjfCIkIBaFQiiJIhYgInwgBXwiIiAjhUIwiSIjICR8IiQgFoVCAYkiFiAbIBp8IhogFSAZhUIwiSIVIB4gFIVCAYkiFCAXfCADfCIXhUIgiSIZfCIbIBSFQiiJIhQgF3wgB3wiF3wgAnwiHiAVIBx8IhUgGCAaIA6FQgGJIg4gIHwgC3wiGoVCIIkiGHwiHCAOhUIoiSIOIBp8IAR8IhogGIVCMIkiGIVCIIkiICAfICEgFSAPhUIBiSIPIB18IAZ8IhWFQiCJIh18Ih8gD4VCKIkiDyAVfCAKfCIVIB2FQjCJIh0gH3wiH3wiISAWhUIoiSIWIB58IAx8Ih4gIIVCMIkiICAhfCIhIBogFyAZhUIwiSIXIBt8IhkgFIVCAYkiFHwgEHwiGiAdhUIgiSIbICR8Ih0gFIVCKIkiFCAafCAJfCIaIBuFQjCJIhsgHyAPhUIBiSIPICJ8IBN8Ih8gF4VCIIkiFyAYIBx8Ihh8IhwgD4VCKIkiDyAffCABfCIfIBeFQjCJIhcgHHwiHCAPhUIBiSIPIBggDoVCAYkiDiAVfCAIfCIVICOFQiCJIhggGXwiGSAOhUIoiSIOIBV8IA18IhV8IA18IiKFQiCJIiN8IiQgD4VCKIkiDyAifCAMfCIiICOFQjCJIiMgJHwiJCAPhUIBiSIPIBsgHXwiGyAVIBiFQjCJIhUgISAWhUIBiSIWIB98IBB8IhiFQiCJIh18Ih8gFoVCKIkiFiAYfCAIfCIYfCASfCIhIBUgGXwiFSAXIBsgFIVCAYkiFCAefCAHfCIZhUIgiSIXfCIbIBSFQiiJIhQgGXwgAXwiGSAXhUIwiSIXhUIgiSIeIBwgICAVIA6FQgGJIg4gGnwgAnwiFYVCIIkiGnwiHCAOhUIoiSIOIBV8IAV8IhUgGoVCMIkiGiAcfCIcfCIgIA+FQiiJIg8gIXwgBHwiISAehUIwiSIeICB8IiAgGCAdhUIwiSIYIB98Ih0gFoVCAYkiFiAZfCAGfCIZIBqFQiCJIhogJHwiHyAWhUIoiSIWIBl8IBN8IhkgGoVCMIkiGiAcIA6FQgGJIg4gInwgCXwiHCAYhUIgiSIYIBcgG3wiF3wiGyAOhUIoiSIOIBx8IAN8IhwgGIVCMIkiGCAbfCIbIA6FQgGJIg4gFSAXIBSFQgGJIhR8IAt8IhUgI4VCIIkiFyAdfCIdIBSFQiiJIhQgFXwgCnwiFXwgBHwiIoVCIIkiI3wiJCAOhUIoiSIOICJ8IAl8IiIgGyAeIBUgF4VCMIkiFSAdfCIXIBSFQgGJIhQgGXwgDHwiGYVCIIkiHXwiGyAUhUIoiSIUIBl8IAp8IhkgHYVCMIkiHSAbfCIbIBSFQgGJIhR8IAN8Ih4gGiAffCIaIBUgICAPhUIBiSIPIBx8IAd8IhyFQiCJIhV8Ih8gD4VCKIkiDyAcfCAQfCIcIBWFQjCJIhWFQiCJIiAgFyAYIBogFoVCAYkiFiAhfCATfCIahUIgiSIYfCIXIBaFQiiJIhYgGnwgDXwiGiAYhUIwiSIYIBd8Ihd8IiEgFIVCKIkiFCAefCAFfCIeICCFQjCJIiAgIXwiISAiICOFQjCJIiIgJHwiIyAOhUIBiSIOIBx8IAt8IhwgGIVCIIkiGCAbfCIbIA6FQiiJIg4gHHwgEnwiHCAYhUIwiSIYIBcgFoVCAYkiFiAZfCABfCIXICKFQiCJIhkgFSAffCIVfCIfIBaFQiiJIhYgF3wgBnwiFyAZhUIwiSIZIB98Ih8gFoVCAYkiFiAVIA+FQgGJIg8gGnwgCHwiFSAdhUIgiSIaICN8Ih0gD4VCKIkiDyAVfCACfCIVfCANfCIihUIgiSIjfCIkIBaFQiiJIhYgInwgCXwiIiAjhUIwiSIjICR8IiQgFoVCAYkiFiAYIBt8IhggFSAahUIwiSIVICEgFIVCAYkiFCAXfCASfCIXhUIgiSIafCIbIBSFQiiJIhQgF3wgCHwiF3wgB3wiISAVIB18IhUgGSAYIA6FQgGJIg4gHnwgBnwiGIVCIIkiGXwiHSAOhUIoiSIOIBh8IAt8IhggGYVCMIkiGYVCIIkiHiAfICAgFSAPhUIBiSIPIBx8IAp8IhWFQiCJIhx8Ih8gD4VCKIkiDyAVfCAEfCIVIByFQjCJIhwgH3wiH3wiICAWhUIoiSIWICF8IAN8IiEgHoVCMIkiHiAgfCIgIBggFyAahUIwiSIXIBt8IhogFIVCAYkiFHwgBXwiGCAchUIgiSIbICR8IhwgFIVCKIkiFCAYfCABfCIYIBuFQjCJIhsgHyAPhUIBiSIPICJ8IAx8Ih8gF4VCIIkiFyAZIB18Ihl8Ih0gD4VCKIkiDyAffCATfCIfIBeFQjCJIhcgHXwiHSAPhUIBiSIPIBkgDoVCAYkiDiAVfCAQfCIVICOFQiCJIhkgGnwiGiAOhUIoiSIOIBV8IAJ8IhV8IBN8IiKFQiCJIiN8IiQgD4VCKIkiDyAifCASfCIiICOFQjCJIiMgJHwiJCAPhUIBiSIPIBsgHHwiGyAVIBmFQjCJIhUgICAWhUIBiSIWIB98IAt8IhmFQiCJIhx8Ih8gFoVCKIkiFiAZfCACfCIZfCAJfCIgIBUgGnwiFSAXIBsgFIVCAYkiFCAhfCAFfCIahUIgiSIXfCIbIBSFQiiJIhQgGnwgA3wiGiAXhUIwiSIXhUIgiSIhIB0gHiAVIA6FQgGJIg4gGHwgEHwiFYVCIIkiGHwiHSAOhUIoiSIOIBV8IAF8IhUgGIVCMIkiGCAdfCIdfCIeIA+FQiiJIg8gIHwgDXwiICAhhUIwiSIhIB58Ih4gGSAchUIwiSIZIB98IhwgFoVCAYkiFiAafCAIfCIaIBiFQiCJIhggJHwiHyAWhUIoiSIWIBp8IAp8IhogGIVCMIkiGCAdIA6FQgGJIg4gInwgBHwiHSAZhUIgiSIZIBcgG3wiF3wiGyAOhUIoiSIOIB18IAd8Ih0gGYVCMIkiGSAbfCIbIA6FQgGJIg4gFSAXIBSFQgGJIhR8IAx8IhUgI4VCIIkiFyAcfCIcIBSFQiiJIhQgFXwgBnwiFXwgEnwiIoVCIIkiI3wiJCAOhUIoiSIOICJ8IBN8IiIgGyAhIBUgF4VCMIkiFSAcfCIXIBSFQgGJIhQgGnwgBnwiGoVCIIkiHHwiGyAUhUIoiSIUIBp8IBB8IhogHIVCMIkiHCAbfCIbIBSFQgGJIhR8IA18IiEgGCAffCIYIBUgHiAPhUIBiSIPIB18IAJ8Ih2FQiCJIhV8Ih4gD4VCKIkiDyAdfCABfCIdIBWFQjCJIhWFQiCJIh8gFyAZIBggFoVCAYkiFiAgfCADfCIYhUIgiSIZfCIXIBaFQiiJIhYgGHwgBHwiGCAZhUIwiSIZIBd8Ihd8IiAgFIVCKIkiFCAhfCAIfCIhIB+FQjCJIh8gIHwiICAiICOFQjCJIiIgJHwiIyAOhUIBiSIOIB18IAd8Ih0gGYVCIIkiGSAbfCIbIA6FQiiJIg4gHXwgDHwiHSAZhUIwiSIZIBcgFoVCAYkiFiAafCALfCIXICKFQiCJIhogFSAefCIVfCIeIBaFQiiJIhYgF3wgCXwiFyAahUIwiSIaIB58Ih4gFoVCAYkiFiAVIA+FQgGJIg8gGHwgBXwiFSAchUIgiSIYICN8IhwgD4VCKIkiDyAVfCAKfCIVfCACfCIChUIgiSIifCIjIBaFQiiJIhYgAnwgC3wiAiAihUIwiSILICN8IiIgFoVCAYkiFiAZIBt8IhkgFSAYhUIwiSIVICAgFIVCAYkiFCAXfCANfCINhUIgiSIXfCIYIBSFQiiJIhQgDXwgBXwiBXwgEHwiECAVIBx8Ig0gGiAZIA6FQgGJIg4gIXwgDHwiDIVCIIkiFXwiGSAOhUIoiSIOIAx8IBJ8IhIgFYVCMIkiDIVCIIkiFSAeIB8gDSAPhUIBiSINIB18IAl8IgmFQiCJIg98IhogDYVCKIkiDSAJfCAIfCIJIA+FQjCJIgggGnwiD3wiGiAWhUIoiSIWIBB8IAd8IhAgEYUgDCAZfCIHIA6FQgGJIgwgCXwgCnwiCiALhUIgiSILIAUgF4VCMIkiBSAYfCIJfCIOIAyFQiiJIgwgCnwgE3wiEyALhUIwiSIKIA58IguFNwOAiQFBACADIAYgDyANhUIBiSINIAJ8fCICIAWFQiCJIgUgB3wiBiANhUIoiSIHIAJ8fCICQQApA4iJAYUgBCABIBIgCSAUhUIBiSIDfHwiASAIhUIgiSISICJ8IgkgA4VCKIkiAyABfHwiASAShUIwiSIEIAl8IhKFNwOIiQFBACATQQApA5CJAYUgECAVhUIwiSIQIBp8IhOFNwOQiQFBACABQQApA5iJAYUgAiAFhUIwiSICIAZ8IgGFNwOYiQFBACASIAOFQgGJQQApA6CJAYUgAoU3A6CJAUEAIBMgFoVCAYlBACkDqIkBhSAKhTcDqIkBQQAgASAHhUIBiUEAKQOwiQGFIASFNwOwiQFBACALIAyFQgGJQQApA7iJAYUgEIU3A7iJAQvdAgUBfwF+AX8BfgJ/IwBBwABrIgAkAAJAQQApA9CJAUIAUg0AQQBBACkDwIkBIgFBACgC4IoBIgKsfCIDNwPAiQFBAEEAKQPIiQEgAyABVK18NwPIiQECQEEALQDoigFFDQBBAEJ/NwPYiQELQQBCfzcD0IkBAkAgAkH/AEoNAEEAIQQDQCACIARqQeCJAWpBADoAACAEQQFqIgRBgAFBACgC4IoBIgJrSA0ACwtB4IkBEAIgAEEAKQOAiQE3AwAgAEEAKQOIiQE3AwggAEEAKQOQiQE3AxAgAEEAKQOYiQE3AxggAEEAKQOgiQE3AyAgAEEAKQOoiQE3AyggAEEAKQOwiQE3AzAgAEEAKQO4iQE3AzhBACgC5IoBIgVBAUgNAEEAIQRBACECA0AgBEGACWogACAEai0AADoAACAEQQFqIQQgBSACQQFqIgJB/wFxSg0ACwsgAEHAAGokAAv9AwMBfwF+AX8jAEGAAWsiAiQAQQBBgQI7AfKKAUEAIAE6APGKAUEAIAA6APCKAUGQfiEAA0AgAEGAiwFqQgA3AAAgAEH4igFqQgA3AAAgAEHwigFqQgA3AAAgAEEYaiIADQALQQAhAEEAQQApA/CKASIDQoiS853/zPmE6gCFNwOAiQFBAEEAKQP4igFCu86qptjQ67O7f4U3A4iJAUEAQQApA4CLAUKr8NP0r+68tzyFNwOQiQFBAEEAKQOIiwFC8e30+KWn/aelf4U3A5iJAUEAQQApA5CLAULRhZrv+s+Uh9EAhTcDoIkBQQBBACkDmIsBQp/Y+dnCkdqCm3+FNwOoiQFBAEEAKQOgiwFC6/qG2r+19sEfhTcDsIkBQQBBACkDqIsBQvnC+JuRo7Pw2wCFNwO4iQFBACADp0H/AXE2AuSKAQJAIAFBAUgNACACQgA3A3ggAkIANwNwIAJCADcDaCACQgA3A2AgAkIANwNYIAJCADcDUCACQgA3A0ggAkIANwNAIAJCADcDOCACQgA3AzAgAkIANwMoIAJCADcDICACQgA3AxggAkIANwMQIAJCADcDCCACQgA3AwBBACEEA0AgAiAAaiAAQYAJai0AADoAACAAQQFqIQAgBEEBaiIEQf8BcSABSA0ACyACQYABEAELIAJBgAFqJAALEgAgAEEDdkH/P3EgAEEQdhAECwkAQYAJIAAQAQsGAEGAiQELGwAgAUEDdkH/P3EgAUEQdhAEQYAJIAAQARADCwsLAQBBgAgLBPAAAAA=",sI="c6f286e6",qI={name:NI,data:JI,hash:sI},cg=new s;function zA(A){return!Number.isInteger(A)||A<8||A>512||A%8!==0?new Error("Invalid variant! Valid values: 8, 16, ..., 512"):null}function pI(A,I){return A|I<<16}function GA(A=512,I=null){if(zA(A))return Promise.reject(zA(A));let g=null,B=A;if(I!==null){if(g=b(I),g.length>64)return Promise.reject(new Error("Max key length is 64 bytes"));B=pI(A,g.length)}let C=A/8;return OA(qI,C).then(Q=>{B>512&&Q.writeMemory(g),Q.init(B);let E={init:B>512?()=>(Q.writeMemory(g),Q.init(B),E):()=>(Q.init(B),E),update:i=>(Q.update(i),E),digest:i=>Q.digest(i),save:()=>Q.save(),load:i=>(Q.load(i),E),blockSize:128,digestSize:C};return E})}function KI(A,I,g){let B=[`m=${I.memorySize}`,`t=${I.iterations}`,`p=${I.parallelism}`].join(",");return`$argon2${I.hashType}$v=19$${B}$${xA(A,!1)}$${xA(g,!1)}`}var VA=new DataView(new ArrayBuffer(4));function P(A){return VA.setInt32(0,A,!0),new Uint8Array(VA.buffer)}function kA(A,I,g){return T(this,void 0,void 0,function*(){if(g<=64){let o=yield GA(g*8);return o.update(P(g)),o.update(I),o.digest("binary")}let B=Math.ceil(g/32)-2,C=new Uint8Array(g);A.init(),A.update(P(g)),A.update(I);let Q=A.digest("binary");C.set(Q.subarray(0,32),0);for(let o=1;o<B;o++)A.init(),A.update(Q),Q=A.digest("binary"),C.set(Q.subarray(0,32),o*32);let E=g-32*B,i;return E===64?(i=A,i.init()):i=yield GA(E*8),i.update(Q),Q=i.digest("binary"),C.set(Q.subarray(0,E),B*32),C})}function MI(A){switch(A){case"d":return 0;case"i":return 1;default:return 2}}function lI(A){return T(this,void 0,void 0,function*(){var I;let{parallelism:g,iterations:B,hashLength:C}=A,Q=b(A.password),E=b(A.salt),i=19,o=MI(A.hashType),{memorySize:F}=A,c=b((I=A.secret)!==null&&I!==void 0?I:""),[e,D]=yield Promise.all([OA(SI,1024),GA(512)]);e.setMemorySize(F*1024+1024);let k=new Uint8Array(24),t=new DataView(k.buffer);t.setInt32(0,g,!0),t.setInt32(4,C,!0),t.setInt32(8,F,!0),t.setInt32(12,B,!0),t.setInt32(16,i,!0),t.setInt32(20,o,!0),e.writeMemory(k,F*1024),D.init(),D.update(k),D.update(P(Q.length)),D.update(Q),D.update(P(E.length)),D.update(E),D.update(P(c.length)),D.update(c),D.update(P(0));let r=Math.floor(F/(g*4))*4,d=new Uint8Array(72),f=D.digest("binary");d.set(f);for(let x=0;x<g;x++){d.set(P(0),64),d.set(P(x),68);let a=x*r,w=yield kA(D,d,1024);e.writeMemory(w,a*1024),a+=1,d.set(P(1),64),w=yield kA(D,d,1024),e.writeMemory(w,a*1024)}let S=new Uint8Array(1024);ZA(S,e.calculate(new Uint8Array([]),F));let N=yield kA(D,S,C);if(A.outputType==="hex"){let x=new Uint8Array(C*2);return dA(x,N,C)}return A.outputType==="encoded"?KI(E,A,N):N})}var YI=A=>{var I;if(!A||typeof A!="object")throw new Error("Invalid options parameter. It requires an object.");if(!A.password)throw new Error("Password must be specified");if(A.password=b(A.password),A.password.length<1)throw new Error("Password must be specified");if(!A.salt)throw new Error("Salt must be specified");if(A.salt=b(A.salt),A.salt.length<8)throw new Error("Salt should be at least 8 bytes long");if(A.secret=b((I=A.secret)!==null&&I!==void 0?I:""),!Number.isInteger(A.iterations)||A.iterations<1)throw new Error("Iterations should be a positive number");if(!Number.isInteger(A.parallelism)||A.parallelism<1)throw new Error("Parallelism should be a positive number");if(!Number.isInteger(A.hashLength)||A.hashLength<4)throw new Error("Hash length should be at least 4 bytes.");if(!Number.isInteger(A.memorySize))throw new Error("Memory size should be specified.");if(A.memorySize<8*A.parallelism)throw new Error("Memory size should be at least 8 * parallelism.");if(A.outputType===void 0&&(A.outputType="hex"),!["hex","binary","encoded"].includes(A.outputType))throw new Error(`Insupported output type ${A.outputType}. Valid values: ['hex', 'binary', 'encoded']`)};function WA(A){return T(this,void 0,void 0,function*(){return YI(A),lI(Object.assign(Object.assign({},A),{hashType:"id"}))})}var Fg=new s;var hg=new s;var eg=new s;var ag=new s;var Dg=new Uint8Array(8);var ng=new s;var tg=new s;var wg=new s;var rg=new s;var fg=new s;var kg=new s;var yg=new s;var dg=new s;var Gg=new s;var Hg=new s;var Ug=new s;var Sg=new Uint8Array(8);var Ng=new s;var Jg=new Uint8Array(8);var sg=new s;var qg=new Uint8Array(8);var pg=new s;var Kg=new s;var Mg=new s;function bA(A){return A instanceof Uint8Array||ArrayBuffer.isView(A)&&A.constructor.name==="Uint8Array"}function FA(A){if(typeof A!="boolean")throw new Error(`boolean expected, not ${A}`)}function hA(A){if(!Number.isSafeInteger(A)||A<0)throw new Error("positive integer expected, got "+A)}function V(A,...I){if(!bA(A))throw new Error("Uint8Array expected");if(I.length>0&&!I.includes(A.length))throw new Error("Uint8Array expected of length "+I+", got length="+A.length)}function HA(A,I=!0){if(A.destroyed)throw new Error("Hash instance has been destroyed");if(I&&A.finished)throw new Error("Hash#digest() has already been called")}function vA(A,I){V(A);let g=I.outputLen;if(A.length<g)throw new Error("digestInto() expects output buffer of length at least "+g)}function v(A){return new Uint32Array(A.buffer,A.byteOffset,Math.floor(A.byteLength/4))}function j(...A){for(let I=0;I<A.length;I++)A[I].fill(0)}function RI(A){return new DataView(A.buffer,A.byteOffset,A.byteLength)}var uI=new Uint8Array(new Uint32Array([287454020]).buffer)[0]===68;function XI(A){if(typeof A!="string")throw new Error("string expected");return new Uint8Array(new TextEncoder().encode(A))}function eA(A){if(typeof A=="string")A=XI(A);else if(bA(A))A=aA(A);else throw new Error("Uint8Array expected, got "+typeof A);return A}function jA(A,I){if(I==null||typeof I!="object")throw new Error("options must be defined");return Object.assign(A,I)}function TA(A,I){if(A.length!==I.length)return!1;let g=0;for(let B=0;B<A.length;B++)g|=A[B]^I[B];return g===0}var UA=(A,I)=>{function g(B,...C){if(V(B),!uI)throw new Error("Non little-endian hardware is not yet supported");if(A.nonceLength!==void 0){let c=C[0];if(!c)throw new Error("nonce / iv required");A.varSizeNonce?V(c):V(c,A.nonceLength)}let Q=A.tagLength;Q&&C[1]!==void 0&&V(C[1]);let E=I(B,...C),i=(c,e)=>{if(e!==void 0){if(c!==2)throw new Error("cipher output not supported");V(e)}},o=!1;return{encrypt(c,e){if(o)throw new Error("cannot encrypt() twice with same key + nonce");return o=!0,V(c),i(E.encrypt.length,e),E.encrypt(c,e)},decrypt(c,e){if(V(c),Q&&c.length<Q)throw new Error("invalid ciphertext length: smaller than tagLength="+Q);return i(E.decrypt.length,e),E.decrypt(c,e)}}}return Object.assign(g,A),g};function SA(A,I,g=!0){if(I===void 0)return new Uint8Array(A);if(I.length!==A)throw new Error("invalid output length, expected "+A+", got: "+I.length);if(g&&!mI(I))throw new Error("invalid output, must be aligned");return I}function PA(A,I,g,B){if(typeof A.setBigUint64=="function")return A.setBigUint64(I,g,B);let C=BigInt(32),Q=BigInt(4294967295),E=Number(g>>C&Q),i=Number(g&Q),o=B?4:0,F=B?0:4;A.setUint32(I+o,E,B),A.setUint32(I+F,i,B)}function $A(A,I,g){FA(g);let B=new Uint8Array(16),C=RI(B);return PA(C,0,BigInt(I),g),PA(C,8,BigInt(A),g),B}function mI(A){return A.byteOffset%4===0}function aA(A){return Uint8Array.from(A)}var AI=A=>Uint8Array.from(A.split("").map(I=>I.charCodeAt(0))),xI=AI("expand 16-byte k"),zI=AI("expand 32-byte k"),VI=v(xI),LI=v(zI);function h(A,I){return A<<I|A>>>32-I}function NA(A){return A.byteOffset%4===0}var DA=64,ZI=16,II=2**32-1,_A=new Uint32Array;function OI(A,I,g,B,C,Q,E,i){let o=C.length,F=new Uint8Array(DA),c=v(F),e=NA(C)&&NA(Q),D=e?v(C):_A,k=e?v(Q):_A;for(let t=0;t<o;E++){if(A(I,g,B,c,E,i),E>=II)throw new Error("arx: counter overflow");let y=Math.min(DA,o-t);if(e&&y===DA){let r=t/4;if(t%4!==0)throw new Error("arx: invalid block position");for(let d=0,f;d<ZI;d++)f=r+d,k[f]=D[f]^c[d];t+=DA;continue}for(let r=0,d;r<y;r++)d=t+r,Q[d]=C[d]^F[r];t+=y}}function JA(A,I){let{allowShortKeys:g,extendNonceFn:B,counterLength:C,counterRight:Q,rounds:E}=jA({allowShortKeys:!1,counterLength:8,counterRight:!1,rounds:20},I);if(typeof A!="function")throw new Error("core must be a function");return hA(C),hA(E),FA(Q),FA(g),(i,o,F,c,e=0)=>{V(i),V(o),V(F);let D=F.length;if(c===void 0&&(c=new Uint8Array(D)),V(c),hA(e),e<0||e>=II)throw new Error("arx: counter overflow");if(c.length<D)throw new Error(`arx: output (${c.length}) is shorter than data (${D})`);let k=[],t=i.length,y,r;if(t===32)k.push(y=aA(i)),r=LI;else if(t===16&&g)y=new Uint8Array(32),y.set(i),y.set(i,16),r=VI,k.push(y);else throw new Error(`arx: invalid 32-byte key, got length=${t}`);NA(o)||k.push(o=aA(o));let d=v(y);if(B){if(o.length!==24)throw new Error("arx: extended nonce must be 24 bytes");B(r,d,v(o.subarray(0,16)),d),o=o.subarray(16)}let f=16-C;if(f!==o.length)throw new Error(`arx: nonce must be ${f} or 16 bytes`);if(f!==12){let N=new Uint8Array(12);N.set(o,Q?0:12-o.length),o=N,k.push(o)}let S=v(o);return OI(A,r,d,S,F,c,e,E),j(...k),c}}var z=(A,I)=>A[I++]&255|(A[I++]&255)<<8,sA=class{constructor(I){this.blockLen=16,this.outputLen=16,this.buffer=new Uint8Array(16),this.r=new Uint16Array(10),this.h=new Uint16Array(10),this.pad=new Uint16Array(8),this.pos=0,this.finished=!1,I=eA(I),V(I,32);let g=z(I,0),B=z(I,2),C=z(I,4),Q=z(I,6),E=z(I,8),i=z(I,10),o=z(I,12),F=z(I,14);this.r[0]=g&8191,this.r[1]=(g>>>13|B<<3)&8191,this.r[2]=(B>>>10|C<<6)&7939,this.r[3]=(C>>>7|Q<<9)&8191,this.r[4]=(Q>>>4|E<<12)&255,this.r[5]=E>>>1&8190,this.r[6]=(E>>>14|i<<2)&8191,this.r[7]=(i>>>11|o<<5)&8065,this.r[8]=(o>>>8|F<<8)&8191,this.r[9]=F>>>5&127;for(let c=0;c<8;c++)this.pad[c]=z(I,16+2*c)}process(I,g,B=!1){let C=B?0:2048,{h:Q,r:E}=this,i=E[0],o=E[1],F=E[2],c=E[3],e=E[4],D=E[5],k=E[6],t=E[7],y=E[8],r=E[9],d=z(I,g+0),f=z(I,g+2),S=z(I,g+4),N=z(I,g+6),x=z(I,g+8),a=z(I,g+10),w=z(I,g+12),G=z(I,g+14),H=Q[0]+(d&8191),U=Q[1]+((d>>>13|f<<3)&8191),J=Q[2]+((f>>>10|S<<6)&8191),q=Q[3]+((S>>>7|N<<9)&8191),p=Q[4]+((N>>>4|x<<12)&8191),K=Q[5]+(x>>>1&8191),M=Q[6]+((x>>>14|a<<2)&8191),l=Q[7]+((a>>>11|w<<5)&8191),Y=Q[8]+((w>>>8|G<<8)&8191),R=Q[9]+(G>>>5|C),n=0,X=n+H*i+U*(5*r)+J*(5*y)+q*(5*t)+p*(5*k);n=X>>>13,X&=8191,X+=K*(5*D)+M*(5*e)+l*(5*c)+Y*(5*F)+R*(5*o),n+=X>>>13,X&=8191;let m=n+H*o+U*i+J*(5*r)+q*(5*y)+p*(5*t);n=m>>>13,m&=8191,m+=K*(5*k)+M*(5*D)+l*(5*e)+Y*(5*c)+R*(5*F),n+=m>>>13,m&=8191;let u=n+H*F+U*o+J*i+q*(5*r)+p*(5*y);n=u>>>13,u&=8191,u+=K*(5*t)+M*(5*k)+l*(5*D)+Y*(5*e)+R*(5*c),n+=u>>>13,u&=8191;let W=n+H*c+U*F+J*o+q*i+p*(5*r);n=W>>>13,W&=8191,W+=K*(5*y)+M*(5*t)+l*(5*k)+Y*(5*D)+R*(5*e),n+=W>>>13,W&=8191;let $=n+H*e+U*c+J*F+q*o+p*i;n=$>>>13,$&=8191,$+=K*(5*r)+M*(5*y)+l*(5*t)+Y*(5*k)+R*(5*D),n+=$>>>13,$&=8191;let _=n+H*D+U*e+J*c+q*F+p*o;n=_>>>13,_&=8191,_+=K*i+M*(5*r)+l*(5*y)+Y*(5*t)+R*(5*k),n+=_>>>13,_&=8191;let AA=n+H*k+U*D+J*e+q*c+p*F;n=AA>>>13,AA&=8191,AA+=K*o+M*i+l*(5*r)+Y*(5*y)+R*(5*t),n+=AA>>>13,AA&=8191;let IA=n+H*t+U*k+J*D+q*e+p*c;n=IA>>>13,IA&=8191,IA+=K*F+M*o+l*i+Y*(5*r)+R*(5*y),n+=IA>>>13,IA&=8191;let gA=n+H*y+U*t+J*k+q*D+p*e;n=gA>>>13,gA&=8191,gA+=K*c+M*F+l*o+Y*i+R*(5*r),n+=gA>>>13,gA&=8191;let BA=n+H*r+U*y+J*t+q*k+p*D;n=BA>>>13,BA&=8191,BA+=K*e+M*c+l*F+Y*o+R*i,n+=BA>>>13,BA&=8191,n=(n<<2)+n|0,n=n+X|0,X=n&8191,n=n>>>13,m+=n,Q[0]=X,Q[1]=m,Q[2]=u,Q[3]=W,Q[4]=$,Q[5]=_,Q[6]=AA,Q[7]=IA,Q[8]=gA,Q[9]=BA}finalize(){let{h:I,pad:g}=this,B=new Uint16Array(10),C=I[1]>>>13;I[1]&=8191;for(let i=2;i<10;i++)I[i]+=C,C=I[i]>>>13,I[i]&=8191;I[0]+=C*5,C=I[0]>>>13,I[0]&=8191,I[1]+=C,C=I[1]>>>13,I[1]&=8191,I[2]+=C,B[0]=I[0]+5,C=B[0]>>>13,B[0]&=8191;for(let i=1;i<10;i++)B[i]=I[i]+C,C=B[i]>>>13,B[i]&=8191;B[9]-=8192;let Q=(C^1)-1;for(let i=0;i<10;i++)B[i]&=Q;Q=~Q;for(let i=0;i<10;i++)I[i]=I[i]&Q|B[i];I[0]=(I[0]|I[1]<<13)&65535,I[1]=(I[1]>>>3|I[2]<<10)&65535,I[2]=(I[2]>>>6|I[3]<<7)&65535,I[3]=(I[3]>>>9|I[4]<<4)&65535,I[4]=(I[4]>>>12|I[5]<<1|I[6]<<14)&65535,I[5]=(I[6]>>>2|I[7]<<11)&65535,I[6]=(I[7]>>>5|I[8]<<8)&65535,I[7]=(I[8]>>>8|I[9]<<5)&65535;let E=I[0]+g[0];I[0]=E&65535;for(let i=1;i<8;i++)E=(I[i]+g[i]|0)+(E>>>16)|0,I[i]=E&65535;j(B)}update(I){HA(this),I=eA(I),V(I);let{buffer:g,blockLen:B}=this,C=I.length;for(let Q=0;Q<C;){let E=Math.min(B-this.pos,C-Q);if(E===B){for(;B<=C-Q;Q+=B)this.process(I,Q);continue}g.set(I.subarray(Q,Q+E),this.pos),this.pos+=E,Q+=E,this.pos===B&&(this.process(g,0,!1),this.pos=0)}return this}destroy(){j(this.h,this.r,this.buffer,this.pad)}digestInto(I){HA(this),vA(I,this),this.finished=!0;let{buffer:g,h:B}=this,{pos:C}=this;if(C){for(g[C++]=1;C<16;C++)g[C]=0;this.process(g,0,!0)}this.finalize();let Q=0;for(let E=0;E<8;E++)I[Q++]=B[E]>>>0,I[Q++]=B[E]>>>8;return I}digest(){let{buffer:I,outputLen:g}=this;this.digestInto(I);let B=I.slice(0,g);return this.destroy(),B}};function WI(A){let I=(B,C)=>A(C).update(eA(B)).digest(),g=A(new Uint8Array(32));return I.outputLen=g.outputLen,I.blockLen=g.blockLen,I.create=B=>A(B),I}var gI=WI(A=>new sA(A));function CI(A,I,g,B,C,Q=20){let E=A[0],i=A[1],o=A[2],F=A[3],c=I[0],e=I[1],D=I[2],k=I[3],t=I[4],y=I[5],r=I[6],d=I[7],f=C,S=g[0],N=g[1],x=g[2],a=E,w=i,G=o,H=F,U=c,J=e,q=D,p=k,K=t,M=y,l=r,Y=d,R=f,n=S,X=N,m=x;for(let W=0;W<Q;W+=2)a=a+U|0,R=h(R^a,16),K=K+R|0,U=h(U^K,12),a=a+U|0,R=h(R^a,8),K=K+R|0,U=h(U^K,7),w=w+J|0,n=h(n^w,16),M=M+n|0,J=h(J^M,12),w=w+J|0,n=h(n^w,8),M=M+n|0,J=h(J^M,7),G=G+q|0,X=h(X^G,16),l=l+X|0,q=h(q^l,12),G=G+q|0,X=h(X^G,8),l=l+X|0,q=h(q^l,7),H=H+p|0,m=h(m^H,16),Y=Y+m|0,p=h(p^Y,12),H=H+p|0,m=h(m^H,8),Y=Y+m|0,p=h(p^Y,7),a=a+J|0,m=h(m^a,16),l=l+m|0,J=h(J^l,12),a=a+J|0,m=h(m^a,8),l=l+m|0,J=h(J^l,7),w=w+q|0,R=h(R^w,16),Y=Y+R|0,q=h(q^Y,12),w=w+q|0,R=h(R^w,8),Y=Y+R|0,q=h(q^Y,7),G=G+p|0,n=h(n^G,16),K=K+n|0,p=h(p^K,12),G=G+p|0,n=h(n^G,8),K=K+n|0,p=h(p^K,7),H=H+U|0,X=h(X^H,16),M=M+X|0,U=h(U^M,12),H=H+U|0,X=h(X^H,8),M=M+X|0,U=h(U^M,7);let u=0;B[u++]=E+a|0,B[u++]=i+w|0,B[u++]=o+G|0,B[u++]=F+H|0,B[u++]=c+U|0,B[u++]=e+J|0,B[u++]=D+q|0,B[u++]=k+p|0,B[u++]=t+K|0,B[u++]=y+M|0,B[u++]=r+l|0,B[u++]=d+Y|0,B[u++]=f+R|0,B[u++]=S+n|0,B[u++]=N+X|0,B[u++]=x+m|0}function PI(A,I,g,B){let C=A[0],Q=A[1],E=A[2],i=A[3],o=I[0],F=I[1],c=I[2],e=I[3],D=I[4],k=I[5],t=I[6],y=I[7],r=g[0],d=g[1],f=g[2],S=g[3];for(let x=0;x<20;x+=2)C=C+o|0,r=h(r^C,16),D=D+r|0,o=h(o^D,12),C=C+o|0,r=h(r^C,8),D=D+r|0,o=h(o^D,7),Q=Q+F|0,d=h(d^Q,16),k=k+d|0,F=h(F^k,12),Q=Q+F|0,d=h(d^Q,8),k=k+d|0,F=h(F^k,7),E=E+c|0,f=h(f^E,16),t=t+f|0,c=h(c^t,12),E=E+c|0,f=h(f^E,8),t=t+f|0,c=h(c^t,7),i=i+e|0,S=h(S^i,16),y=y+S|0,e=h(e^y,12),i=i+e|0,S=h(S^i,8),y=y+S|0,e=h(e^y,7),C=C+F|0,S=h(S^C,16),t=t+S|0,F=h(F^t,12),C=C+F|0,S=h(S^C,8),t=t+S|0,F=h(F^t,7),Q=Q+c|0,r=h(r^Q,16),y=y+r|0,c=h(c^y,12),Q=Q+c|0,r=h(r^Q,8),y=y+r|0,c=h(c^y,7),E=E+e|0,d=h(d^E,16),D=D+d|0,e=h(e^D,12),E=E+e|0,d=h(d^E,8),D=D+d|0,e=h(e^D,7),i=i+o|0,f=h(f^i,16),k=k+f|0,o=h(o^k,12),i=i+o|0,f=h(f^i,8),k=k+f|0,o=h(o^k,7);let N=0;B[N++]=C,B[N++]=Q,B[N++]=E,B[N++]=i,B[N++]=r,B[N++]=d,B[N++]=f,B[N++]=S}var bI=JA(CI,{counterRight:!1,counterLength:4,allowShortKeys:!1}),vI=JA(CI,{counterRight:!1,counterLength:8,extendNonceFn:PI,allowShortKeys:!1});var jI=new Uint8Array(16),BI=(A,I)=>{A.update(I);let g=I.length%16;g&&A.update(jI.subarray(g))},TI=new Uint8Array(32);function QI(A,I,g,B,C){let Q=A(I,g,TI),E=gI.create(Q);C&&BI(E,C),BI(E,B);let i=$A(B.length,C?C.length:0,!0);E.update(i);let o=E.digest();return j(Q,i),o}var iI=A=>(I,g,B)=>({encrypt(Q,E){let i=Q.length;E=SA(i+16,E,!1),E.set(Q);let o=E.subarray(0,-16);A(I,g,o,o,1);let F=QI(A,I,g,o,B);return E.set(F,i),j(F),E},decrypt(Q,E){E=SA(Q.length-16,E,!1);let i=Q.subarray(0,-16),o=Q.subarray(-16),F=QI(A,I,g,i,B);if(!TA(o,F))throw new Error("invalid tag");return E.set(Q.subarray(0,-16)),A(I,g,E,E,1),j(F),E}}),Zg=UA({blockSize:64,nonceLength:12,tagLength:16},iI(bI)),iA=UA({blockSize:64,nonceLength:24,tagLength:16},iI(vI));var{Keypair:KA,PublicKey:MA}=globalThis.solanaWeb3,oA=new TextEncoder,$I=new TextDecoder,lA=212,EI=oA.encode("SCK1"),_I=oA.encode("SABHA-CHAINKEY-NAME-V1\0"),Ag=oA.encode("SABHA-CHAINKEY-ENVELOPE-V1\0"),oI=Object.freeze({memoryKiB:65536,iterations:3,parallelism:1});function L(A,I){if(!A)throw new Error(I)}function Z(A){if(A instanceof Uint8Array)return A;if(A instanceof ArrayBuffer)return new Uint8Array(A);if(ArrayBuffer.isView(A))return new Uint8Array(A.buffer,A.byteOffset,A.byteLength);if(Array.isArray(A))return Uint8Array.from(A);throw new TypeError("Expected bytes")}function YA(...A){let I=A.map(Z),g=new Uint8Array(I.reduce((C,Q)=>C+Q.length,0)),B=0;for(let C of I)g.set(C,B),B+=C.length;return g}function nA(A,I){if(A=Z(A),I=Z(I),A.length!==I.length)return!1;let g=0;for(let B=0;B<A.length;B++)g|=A[B]^I[B];return g===0}function EA(A){return crypto.getRandomValues(new Uint8Array(A))}function Ig(A){let I="",g=Z(A);for(let B=0;B<g.length;B+=32768)I+=String.fromCharCode(...g.subarray(B,B+32768));return btoa(I)}function gg(A){let I=atob(String(A).replace(/\s+/g,""));return Uint8Array.from(I,g=>g.charCodeAt(0))}async function cI(A){return new Uint8Array(await crypto.subtle.digest("SHA-256",Z(A)))}function RA(A){let I=String(A??"").normalize("NFKC").trim().toLowerCase();return L(/^[a-z0-9][a-z0-9_-]{2,31}$/.test(I),"Player name must be 3\u201332 characters: a\u2013z, 0\u20139, _ or -"),I}async function uA(A){return cI(YA(_I,oA.encode(RA(A))))}function FI(A,I=""){let g=String(A??""),B=[];return g.length<16&&B.push("use at least 16 characters"),g.length>256&&B.push("password is too long"),I&&g.toLowerCase().includes(RA(I))&&B.push("do not include the player name"),/^(.)\1+$/.test(g)&&B.push("do not repeat one character"),/password|qwerty|123456|letmein|sabha/i.test(g)&&B.push("avoid common password patterns"),[/[a-z]/,/[A-Z]/,/\d/,/[^A-Za-z0-9]/].filter(C=>C.test(g)).length<3&&g.length<24&&B.push("use more variety or a longer passphrase"),{ok:B.length===0,errors:B}}function tA(A){let I=new MA(A);return typeof A=="string"&&L(I.toBase58()===A,"Expected a canonical Solana public key"),I.toBytes()}function Bg(A){return new MA(Z(A)).toBase58()}function hI(A){return{addr:A.publicKey.toBase58(),sk:A.secretKey}}function Qg(){return hI(KA.generate())}function eI(A){let I=Z(A);return L(I.length===32,"Signing seed must be 32 bytes"),hI(KA.fromSeed(I))}function Cg(A){let I=Z(A.sk);return L(I.length===64,"Solana secret key must be 64 bytes"),I.slice(0,32)}function aI(A){try{A?.sk?.fill(0)}catch{}}function qA(A,I,g){new DataView(A.buffer,A.byteOffset,A.byteLength).setUint32(I,Number(g),!1)}function pA(A,I){return new DataView(A.buffer,A.byteOffset,A.byteLength).getUint32(I,!1)}async function DI(A,I,g){return WA({password:String(A).normalize("NFC"),salt:Z(I),iterations:Number(g.iterations),parallelism:Number(g.parallelism),memorySize:Number(g.memoryKiB),hashLength:32,outputType:"binary"})}function nI(A,I,g){return YA(Ag,A,I,g)}async function ig({name:A,password:I,seed:g,ownerAddress:B,networkHash:C,kdf:Q=oI}){let E=FI(I,A);L(E.ok,E.errors.join("; "));let i=await uA(A),o=tA(B),F=Z(C);L(F.length===32,"Network genesis hash must be 32 bytes"),L(Z(g).length===32,"Signing seed must be 32 bytes");let c=EA(16),e=EA(24),D=EA(24),k=EA(32),t;try{t=await DI(I,c,Q);let y=nI(i,o,F),r=iA(t,e,y).encrypt(k),d=iA(k,D,y).encrypt(Z(g));L(r.length===48&&d.length===48,"Unexpected AEAD length");let f=new Uint8Array(lA);return f.set(EI,0),f[4]=1,f[5]=1,f[6]=1,f[7]=0,qA(f,8,Q.memoryKiB),qA(f,12,Q.iterations),qA(f,16,Q.parallelism),f.set(c,20),f.set(F,36),f.set(e,68),f.set(D,92),f.set(r,116),f.set(d,164),f}finally{t?.fill(0),k.fill(0)}}function tI(A){let I=Z(A);return L(I.length===lA,`Unsupported ChainKey envelope length ${I.length}`),L(nA(I.subarray(0,4),EI),"Not a player recovery envelope"),L(I[4]===1,"Unsupported ChainKey version"),L(I[5]===1&&I[6]===1,"Unsupported cryptographic suite"),{version:I[4],kdf:{memoryKiB:pA(I,8),iterations:pA(I,12),parallelism:pA(I,16)},salt:I.slice(20,36),networkHash:I.slice(36,68),wrapNonce:I.slice(68,92),seedNonce:I.slice(92,116),wrappedDek:I.slice(116,164),encryptedSeed:I.slice(164,212)}}async function Eg({name:A,password:I,ownerAddress:g,envelope:B,expectedNetworkHash:C}){let Q=await uA(A),E=tA(g),i=tI(B);C&&L(nA(i.networkHash,Z(C)),"This player key belongs to a different Solana network");let o=nI(Q,E,i.networkHash),F,c,e,D;try{F=await DI(I,i.salt,i.kdf);try{c=iA(F,i.wrapNonce,o).decrypt(i.wrappedDek),e=iA(c,i.seedNonce,o).decrypt(i.encryptedSeed)}catch{throw new Error("Incorrect player name or password, or corrupted on-chain recovery record")}return D=eI(e),L(nA(tA(D.addr),E),"Decrypted key does not match the on-chain owner"),{seed:e,account:D,networkHash:i.networkHash,kdf:i.kdf}}catch(k){throw e?.fill(0),aI(D),k}finally{F?.fill(0),c?.fill(0)}}globalThis.SabhaChainKey=Object.freeze({solana:Object.freeze({Keypair:KA,PublicKey:MA}),DEFAULT_KDF:oI,HEADER_SIZE:lA,te:oA,td:$I,assert:L,u8:Z,concat:YA,equalBytes:nA,randomBytes:EA,bytesToBase64:Ig,base64ToBytes:gg,sha256:cI,normalizeName:RA,nameHash:uA,validatePassword:FI,publicKeyBytes:tA,publicKeyAddress:Bg,generateAccount:Qg,accountFromSeed:eI,accountSeed:Cg,wipeAccount:aI,encryptSeed:ig,decryptSeed:Eg,parseEnvelope:tI});})();
+(()=>{function T(A,I,g,B){function C(Q){return Q instanceof g?Q:new g(function(E){E(Q)})}return new(g||(g=Promise))(function(Q,E){function i(c){try{F(B.next(c))}catch(e){E(e)}}function o(c){try{F(B.throw(c))}catch(e){E(e)}}function F(c){c.done?Q(c.value):C(c.value).then(i,o)}F((B=B.apply(A,I||[])).next())})}var s=class{constructor(){this.mutex=Promise.resolve()}lock(){let I=()=>{};return this.mutex=this.mutex.then(()=>new Promise(I)),new Promise(g=>{I=g})}dispatch(I){return T(this,void 0,void 0,function*(){let g=yield this.lock();try{return yield Promise.resolve(I())}finally{g()}})}},wA;function wI(){return typeof globalThis<"u"?globalThis:typeof self<"u"?self:typeof window<"u"?window:global}var yA=wI(),rA=(wA=yA.Buffer)!==null&&wA!==void 0?wA:null,rI=yA.TextEncoder?new yA.TextEncoder:null;function LA(A,I){return(A&15)+(A>>6|A>>3&8)<<4|(I&15)+(I>>6|I>>3&8)}function ZA(A,I){let g=I.length>>1;for(let B=0;B<g;B++){let C=B<<1;A[B]=LA(I.charCodeAt(C),I.charCodeAt(C+1))}}function fI(A,I){if(A.length!==I.length*2)return!1;for(let g=0;g<I.length;g++){let B=g<<1;if(I[g]!==LA(A.charCodeAt(B),A.charCodeAt(B+1)))return!1}return!0}var XA=87,mA=48;function dA(A,I,g){let B=0;for(let C=0;C<g;C++){let Q=I[C]>>>4;A[B++]=Q>9?Q+XA:Q+mA,Q=I[C]&15,A[B++]=Q>9?Q+XA:Q+mA}return String.fromCharCode.apply(null,A)}var b=rA!==null?A=>{if(typeof A=="string"){let I=rA.from(A,"utf8");return new Uint8Array(I.buffer,I.byteOffset,I.length)}if(rA.isBuffer(A))return new Uint8Array(A.buffer,A.byteOffset,A.length);if(ArrayBuffer.isView(A))return new Uint8Array(A.buffer,A.byteOffset,A.byteLength);throw new Error("Invalid data type!")}:A=>{if(typeof A=="string")return rI.encode(A);if(ArrayBuffer.isView(A))return new Uint8Array(A.buffer,A.byteOffset,A.byteLength);throw new Error("Invalid data type!")},O="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",CA=new Uint8Array(256);for(let A=0;A<O.length;A++)CA[O.charCodeAt(A)]=A;function xA(A,I=!0){let g=A.length,B=g%3,C=[],Q=g-B;for(let E=0;E<Q;E+=3){let i=(A[E]<<16&16711680)+(A[E+1]<<8&65280)+(A[E+2]&255),o=O.charAt(i>>18&63)+O.charAt(i>>12&63)+O.charAt(i>>6&63)+O.charAt(i&63);C.push(o)}if(B===1){let E=A[g-1],i=O.charAt(E>>2),o=O.charAt(E<<4&63);C.push(`${i}${o}`),I&&C.push("==")}else if(B===2){let E=(A[g-2]<<8)+A[g-1],i=O.charAt(E>>10),o=O.charAt(E>>4&63),F=O.charAt(E<<2&63);C.push(`${i}${o}${F}`),I&&C.push("=")}return C.join("")}function kI(A){let I=Math.floor(A.length*.75),g=A.length;return A[g-1]==="="&&(I-=1,A[g-2]==="="&&(I-=1)),I}function yI(A){let I=kI(A),g=A.length,B=new Uint8Array(I),C=0;for(let Q=0;Q<g;Q+=4){let E=CA[A.charCodeAt(Q)],i=CA[A.charCodeAt(Q+1)],o=CA[A.charCodeAt(Q+2)],F=CA[A.charCodeAt(Q+3)];B[C]=E<<2|i>>4,C+=1,B[C]=(i&15)<<4|o>>2,C+=1,B[C]=(o&3)<<6|F&63,C+=1}return B}var cA=16*1024,QA=4,dI=new s,fA=new Map;function OA(A,I){return T(this,void 0,void 0,function*(){let g=null,B=null,C=!1;if(typeof WebAssembly>"u")throw new Error("WebAssembly is not supported in this environment!");let Q=(a,w=0)=>{B.set(a,w)},E=()=>B,i=()=>g.exports,o=a=>{g.exports.Hash_SetMemorySize(a);let w=g.exports.Hash_GetBuffer(),G=g.exports.memory.buffer;B=new Uint8Array(G,w,a)},F=()=>new DataView(g.exports.memory.buffer).getUint32(g.exports.STATE_SIZE,!0),c=dI.dispatch(()=>T(this,void 0,void 0,function*(){if(!fA.has(A.name)){let w=yI(A.data),G=WebAssembly.compile(w);fA.set(A.name,G)}let a=yield fA.get(A.name);g=yield WebAssembly.instantiate(a,{})})),e=()=>T(this,void 0,void 0,function*(){g||(yield c);let a=g.exports.Hash_GetBuffer(),w=g.exports.memory.buffer;B=new Uint8Array(w,a,cA)}),D=(a=null)=>{C=!0,g.exports.Hash_Init(a)},k=a=>{let w=0;for(;w<a.length;){let G=a.subarray(w,w+cA);w+=G.length,B.set(G),g.exports.Hash_Update(G.length)}},t=a=>{if(!C)throw new Error("update() called before init()");let w=b(a);k(w)},y=new Uint8Array(I*2),r=(a,w=null)=>{if(!C)throw new Error("digest() called before init()");return C=!1,g.exports.Hash_Final(w),a==="binary"?B.slice(0,I):dA(y,B,I)},d=()=>{if(!C)throw new Error("save() can only be called after init() and before digest()");let a=g.exports.Hash_GetState(),w=F(),G=g.exports.memory.buffer,H=new Uint8Array(G,a,w),U=new Uint8Array(QA+w);return ZA(U,A.hash),U.set(H,QA),U},f=a=>{if(!(a instanceof Uint8Array))throw new Error("load() expects an Uint8Array generated by save()");let w=g.exports.Hash_GetState(),G=F(),H=QA+G,U=g.exports.memory.buffer;if(a.length!==H)throw new Error(`Bad state length (expected ${H} bytes, got ${a.length})`);if(!fI(A.hash,a.subarray(0,QA)))throw new Error("This state was written by an incompatible hash implementation");let J=a.subarray(QA);new Uint8Array(U,w,G).set(J),C=!0},S=a=>typeof a=="string"?a.length<cA/4:a.byteLength<cA,N=S;switch(A.name){case"argon2":case"scrypt":N=()=>!0;break;case"blake2b":case"blake2s":N=(a,w)=>w<=512&&S(a);break;case"blake3":N=(a,w)=>w===0&&S(a);break;case"xxhash64":case"xxhash3":case"xxhash128":case"crc64":N=()=>!1;break}let x=(a,w=null,G=null)=>{if(!N(a,w))return D(w),t(a),r("hex",G);let H=b(a);return B.set(H),g.exports.Hash_Calculate(H.length,w,G),dA(y,B,I)};return yield e(),{getMemory:E,writeMemory:Q,getExports:i,setMemorySize:o,init:D,update:t,digest:r,save:d,load:f,calculate:x,hashLength:I}})}var og=new s;var GI="argon2",HI="AGFzbQEAAAABKQVgAX8Bf2AAAX9gEH9/f39/f39/f39/f39/f38AYAR/f39/AGACf38AAwYFAAECAwQFBgEBAoCAAgYIAX8BQZCoBAsHQQQGbWVtb3J5AgASSGFzaF9TZXRNZW1vcnlTaXplAAAOSGFzaF9HZXRCdWZmZXIAAQ5IYXNoX0NhbGN1bGF0ZQAECvEyBVgBAn9BACEBAkAgAEEAKAKICCICRg0AAkAgACACayIAQRB2IABBgIB8cSAASWoiAEAAQX9HDQBB/wHADwtBACEBQQBBACkDiAggAEEQdK18NwOICAsgAcALcAECfwJAQQAoAoAIIgANAEEAPwBBEHQiADYCgAhBACgCiAgiAUGAgCBGDQACQEGAgCAgAWsiAEEQdiAAQYCAfHEgAElqIgBAAEF/Rw0AQQAPC0EAQQApA4gIIABBEHStfDcDiAhBACgCgAghAAsgAAvcDgECfiAAIAQpAwAiECAAKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAMIBAgDCkDAIVCIIkiEDcDACAIIBAgCCkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgBCAQIAQpAwCFQiiJIhA3AwAgACAQIAApAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAwgECAMKQMAhUIwiSIQNwMAIAggECAIKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAEIBAgBCkDAIVCAYk3AwAgASAFKQMAIhAgASkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDSAQIA0pAwCFQiCJIhA3AwAgCSAQIAkpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAUgECAFKQMAhUIoiSIQNwMAIAEgECABKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACANIBAgDSkDAIVCMIkiEDcDACAJIBAgCSkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBSAQIAUpAwCFQgGJNwMAIAIgBikDACIQIAIpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIA4gECAOKQMAhUIgiSIQNwMAIAogECAKKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAGIBAgBikDAIVCKIkiEDcDACACIBAgAikDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgDiAQIA4pAwCFQjCJIhA3AwAgCiAQIAopAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAYgECAGKQMAhUIBiTcDACADIAcpAwAiECADKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAPIBAgDykDAIVCIIkiEDcDACALIBAgCykDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgByAQIAcpAwCFQiiJIhA3AwAgAyAQIAMpAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIA8gECAPKQMAhUIwiSIQNwMAIAsgECALKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAHIBAgBykDAIVCAYk3AwAgACAFKQMAIhAgACkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDyAQIA8pAwCFQiCJIhA3AwAgCiAQIAopAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAUgECAFKQMAhUIoiSIQNwMAIAAgECAAKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAPIBAgDykDAIVCMIkiEDcDACAKIBAgCikDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBSAQIAUpAwCFQgGJNwMAIAEgBikDACIQIAEpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAwgECAMKQMAhUIgiSIQNwMAIAsgECALKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACAGIBAgBikDAIVCKIkiEDcDACABIBAgASkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgDCAQIAwpAwCFQjCJIhA3AwAgCyAQIAspAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIAYgECAGKQMAhUIBiTcDACACIAcpAwAiECACKQMAIhF8IBFCAYZC/v///x+DIBBC/////w+DfnwiEDcDACANIBAgDSkDAIVCIIkiEDcDACAIIBAgCCkDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgByAQIAcpAwCFQiiJIhA3AwAgAiAQIAIpAwAiEXwgEEL/////D4MgEUIBhkL+////H4N+fCIQNwMAIA0gECANKQMAhUIwiSIQNwMAIAggECAIKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAHIBAgBykDAIVCAYk3AwAgAyAEKQMAIhAgAykDACIRfCARQgGGQv7///8fgyAQQv////8Pg358IhA3AwAgDiAQIA4pAwCFQiCJIhA3AwAgCSAQIAkpAwAiEXwgEUIBhkL+////H4MgEEL/////D4N+fCIQNwMAIAQgECAEKQMAhUIoiSIQNwMAIAMgECADKQMAIhF8IBBC/////w+DIBFCAYZC/v///x+DfnwiEDcDACAOIBAgDikDAIVCMIkiEDcDACAJIBAgCSkDACIRfCAQQv////8PgyARQgGGQv7///8fg358IhA3AwAgBCAQIAQpAwCFQgGJNwMAC98aAQN/QQAhBEEAIAIpAwAgASkDAIU3A5AIQQAgAikDCCABKQMIhTcDmAhBACACKQMQIAEpAxCFNwOgCEEAIAIpAxggASkDGIU3A6gIQQAgAikDICABKQMghTcDsAhBACACKQMoIAEpAyiFNwO4CEEAIAIpAzAgASkDMIU3A8AIQQAgAikDOCABKQM4hTcDyAhBACACKQNAIAEpA0CFNwPQCEEAIAIpA0ggASkDSIU3A9gIQQAgAikDUCABKQNQhTcD4AhBACACKQNYIAEpA1iFNwPoCEEAIAIpA2AgASkDYIU3A/AIQQAgAikDaCABKQNohTcD+AhBACACKQNwIAEpA3CFNwOACUEAIAIpA3ggASkDeIU3A4gJQQAgAikDgAEgASkDgAGFNwOQCUEAIAIpA4gBIAEpA4gBhTcDmAlBACACKQOQASABKQOQAYU3A6AJQQAgAikDmAEgASkDmAGFNwOoCUEAIAIpA6ABIAEpA6ABhTcDsAlBACACKQOoASABKQOoAYU3A7gJQQAgAikDsAEgASkDsAGFNwPACUEAIAIpA7gBIAEpA7gBhTcDyAlBACACKQPAASABKQPAAYU3A9AJQQAgAikDyAEgASkD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",UI="e4cdc523",SI={name:GI,data:HI,hash:UI},NI="blake2b",JI="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",sI="c6f286e6",qI={name:NI,data:JI,hash:sI},cg=new s;function zA(A){return!Number.isInteger(A)||A<8||A>512||A%8!==0?new Error("Invalid variant! Valid values: 8, 16, ..., 512"):null}function pI(A,I){return A|I<<16}function GA(A=512,I=null){if(zA(A))return Promise.reject(zA(A));let g=null,B=A;if(I!==null){if(g=b(I),g.length>64)return Promise.reject(new Error("Max key length is 64 bytes"));B=pI(A,g.length)}let C=A/8;return OA(qI,C).then(Q=>{B>512&&Q.writeMemory(g),Q.init(B);let E={init:B>512?()=>(Q.writeMemory(g),Q.init(B),E):()=>(Q.init(B),E),update:i=>(Q.update(i),E),digest:i=>Q.digest(i),save:()=>Q.save(),load:i=>(Q.load(i),E),blockSize:128,digestSize:C};return E})}function KI(A,I,g){let B=[`m=${I.memorySize}`,`t=${I.iterations}`,`p=${I.parallelism}`].join(",");return`$argon2${I.hashType}$v=19$${B}$${xA(A,!1)}$${xA(g,!1)}`}var VA=new DataView(new ArrayBuffer(4));function P(A){return VA.setInt32(0,A,!0),new Uint8Array(VA.buffer)}function kA(A,I,g){return T(this,void 0,void 0,function*(){if(g<=64){let o=yield GA(g*8);return o.update(P(g)),o.update(I),o.digest("binary")}let B=Math.ceil(g/32)-2,C=new Uint8Array(g);A.init(),A.update(P(g)),A.update(I);let Q=A.digest("binary");C.set(Q.subarray(0,32),0);for(let o=1;o<B;o++)A.init(),A.update(Q),Q=A.digest("binary"),C.set(Q.subarray(0,32),o*32);let E=g-32*B,i;return E===64?(i=A,i.init()):i=yield GA(E*8),i.update(Q),Q=i.digest("binary"),C.set(Q.subarray(0,E),B*32),C})}function MI(A){switch(A){case"d":return 0;case"i":return 1;default:return 2}}function lI(A){return T(this,void 0,void 0,function*(){var I;let{parallelism:g,iterations:B,hashLength:C}=A,Q=b(A.password),E=b(A.salt),i=19,o=MI(A.hashType),{memorySize:F}=A,c=b((I=A.secret)!==null&&I!==void 0?I:""),[e,D]=yield Promise.all([OA(SI,1024),GA(512)]);e.setMemorySize(F*1024+1024);let k=new Uint8Array(24),t=new DataView(k.buffer);t.setInt32(0,g,!0),t.setInt32(4,C,!0),t.setInt32(8,F,!0),t.setInt32(12,B,!0),t.setInt32(16,i,!0),t.setInt32(20,o,!0),e.writeMemory(k,F*1024),D.init(),D.update(k),D.update(P(Q.length)),D.update(Q),D.update(P(E.length)),D.update(E),D.update(P(c.length)),D.update(c),D.update(P(0));let r=Math.floor(F/(g*4))*4,d=new Uint8Array(72),f=D.digest("binary");d.set(f);for(let x=0;x<g;x++){d.set(P(0),64),d.set(P(x),68);let a=x*r,w=yield kA(D,d,1024);e.writeMemory(w,a*1024),a+=1,d.set(P(1),64),w=yield kA(D,d,1024),e.writeMemory(w,a*1024)}let S=new Uint8Array(1024);ZA(S,e.calculate(new Uint8Array([]),F));let N=yield kA(D,S,C);if(A.outputType==="hex"){let x=new Uint8Array(C*2);return dA(x,N,C)}return A.outputType==="encoded"?KI(E,A,N):N})}var YI=A=>{var I;if(!A||typeof A!="object")throw new Error("Invalid options parameter. It requires an object.");if(!A.password)throw new Error("Password must be specified");if(A.password=b(A.password),A.password.length<1)throw new Error("Password must be specified");if(!A.salt)throw new Error("Salt must be specified");if(A.salt=b(A.salt),A.salt.length<8)throw new Error("Salt should be at least 8 bytes long");if(A.secret=b((I=A.secret)!==null&&I!==void 0?I:""),!Number.isInteger(A.iterations)||A.iterations<1)throw new Error("Iterations should be a positive number");if(!Number.isInteger(A.parallelism)||A.parallelism<1)throw new Error("Parallelism should be a positive number");if(!Number.isInteger(A.hashLength)||A.hashLength<4)throw new Error("Hash length should be at least 4 bytes.");if(!Number.isInteger(A.memorySize))throw new Error("Memory size should be specified.");if(A.memorySize<8*A.parallelism)throw new Error("Memory size should be at least 8 * parallelism.");if(A.outputType===void 0&&(A.outputType="hex"),!["hex","binary","encoded"].includes(A.outputType))throw new Error(`Insupported output type ${A.outputType}. Valid values: ['hex', 'binary', 'encoded']`)};function WA(A){return T(this,void 0,void 0,function*(){return YI(A),lI(Object.assign(Object.assign({},A),{hashType:"id"}))})}var Fg=new s;var hg=new s;var eg=new s;var ag=new s;var Dg=new Uint8Array(8);var ng=new s;var tg=new s;var wg=new s;var rg=new s;var fg=new s;var kg=new s;var yg=new s;var dg=new s;var Gg=new s;var Hg=new s;var Ug=new s;var Sg=new Uint8Array(8);var Ng=new s;var Jg=new Uint8Array(8);var sg=new s;var qg=new Uint8Array(8);var pg=new s;var Kg=new s;var Mg=new s;function bA(A){return A instanceof Uint8Array||ArrayBuffer.isView(A)&&A.constructor.name==="Uint8Array"}function FA(A){if(typeof A!="boolean")throw new Error(`boolean expected, not ${A}`)}function hA(A){if(!Number.isSafeInteger(A)||A<0)throw new Error("positive integer expected, got "+A)}function V(A,...I){if(!bA(A))throw new Error("Uint8Array expected");if(I.length>0&&!I.includes(A.length))throw new Error("Uint8Array expected of length "+I+", got length="+A.length)}function HA(A,I=!0){if(A.destroyed)throw new Error("Hash instance has been destroyed");if(I&&A.finished)throw new Error("Hash#digest() has already been called")}function vA(A,I){V(A);let g=I.outputLen;if(A.length<g)throw new Error("digestInto() expects output buffer of length at least "+g)}function v(A){return new Uint32Array(A.buffer,A.byteOffset,Math.floor(A.byteLength/4))}function j(...A){for(let I=0;I<A.length;I++)A[I].fill(0)}function RI(A){return new DataView(A.buffer,A.byteOffset,A.byteLength)}var uI=new Uint8Array(new Uint32Array([287454020]).buffer)[0]===68;function XI(A){if(typeof A!="string")throw new Error("string expected");return new Uint8Array(new TextEncoder().encode(A))}function eA(A){if(typeof A=="string")A=XI(A);else if(bA(A))A=aA(A);else throw new Error("Uint8Array expected, got "+typeof A);return A}function jA(A,I){if(I==null||typeof I!="object")throw new Error("options must be defined");return Object.assign(A,I)}function TA(A,I){if(A.length!==I.length)return!1;let g=0;for(let B=0;B<A.length;B++)g|=A[B]^I[B];return g===0}var UA=(A,I)=>{function g(B,...C){if(V(B),!uI)throw new Error("Non little-endian hardware is not yet supported");if(A.nonceLength!==void 0){let c=C[0];if(!c)throw new Error("nonce / iv required");A.varSizeNonce?V(c):V(c,A.nonceLength)}let Q=A.tagLength;Q&&C[1]!==void 0&&V(C[1]);let E=I(B,...C),i=(c,e)=>{if(e!==void 0){if(c!==2)throw new Error("cipher output not supported");V(e)}},o=!1;return{encrypt(c,e){if(o)throw new Error("cannot encrypt() twice with same key + nonce");return o=!0,V(c),i(E.encrypt.length,e),E.encrypt(c,e)},decrypt(c,e){if(V(c),Q&&c.length<Q)throw new Error("invalid ciphertext length: smaller than tagLength="+Q);return i(E.decrypt.length,e),E.decrypt(c,e)}}}return Object.assign(g,A),g};function SA(A,I,g=!0){if(I===void 0)return new Uint8Array(A);if(I.length!==A)throw new Error("invalid output length, expected "+A+", got: "+I.length);if(g&&!mI(I))throw new Error("invalid output, must be aligned");return I}function PA(A,I,g,B){if(typeof A.setBigUint64=="function")return A.setBigUint64(I,g,B);let C=BigInt(32),Q=BigInt(4294967295),E=Number(g>>C&Q),i=Number(g&Q),o=B?4:0,F=B?0:4;A.setUint32(I+o,E,B),A.setUint32(I+F,i,B)}function $A(A,I,g){FA(g);let B=new Uint8Array(16),C=RI(B);return PA(C,0,BigInt(I),g),PA(C,8,BigInt(A),g),B}function mI(A){return A.byteOffset%4===0}function aA(A){return Uint8Array.from(A)}var AI=A=>Uint8Array.from(A.split("").map(I=>I.charCodeAt(0))),xI=AI("expand 16-byte k"),zI=AI("expand 32-byte k"),VI=v(xI),LI=v(zI);function h(A,I){return A<<I|A>>>32-I}function NA(A){return A.byteOffset%4===0}var DA=64,ZI=16,II=2**32-1,_A=new Uint32Array;function OI(A,I,g,B,C,Q,E,i){let o=C.length,F=new Uint8Array(DA),c=v(F),e=NA(C)&&NA(Q),D=e?v(C):_A,k=e?v(Q):_A;for(let t=0;t<o;E++){if(A(I,g,B,c,E,i),E>=II)throw new Error("arx: counter overflow");let y=Math.min(DA,o-t);if(e&&y===DA){let r=t/4;if(t%4!==0)throw new Error("arx: invalid block position");for(let d=0,f;d<ZI;d++)f=r+d,k[f]=D[f]^c[d];t+=DA;continue}for(let r=0,d;r<y;r++)d=t+r,Q[d]=C[d]^F[r];t+=y}}function JA(A,I){let{allowShortKeys:g,extendNonceFn:B,counterLength:C,counterRight:Q,rounds:E}=jA({allowShortKeys:!1,counterLength:8,counterRight:!1,rounds:20},I);if(typeof A!="function")throw new Error("core must be a function");return hA(C),hA(E),FA(Q),FA(g),(i,o,F,c,e=0)=>{V(i),V(o),V(F);let D=F.length;if(c===void 0&&(c=new Uint8Array(D)),V(c),hA(e),e<0||e>=II)throw new Error("arx: counter overflow");if(c.length<D)throw new Error(`arx: output (${c.length}) is shorter than data (${D})`);let k=[],t=i.length,y,r;if(t===32)k.push(y=aA(i)),r=LI;else if(t===16&&g)y=new Uint8Array(32),y.set(i),y.set(i,16),r=VI,k.push(y);else throw new Error(`arx: invalid 32-byte key, got length=${t}`);NA(o)||k.push(o=aA(o));let d=v(y);if(B){if(o.length!==24)throw new Error("arx: extended nonce must be 24 bytes");B(r,d,v(o.subarray(0,16)),d),o=o.subarray(16)}let f=16-C;if(f!==o.length)throw new Error(`arx: nonce must be ${f} or 16 bytes`);if(f!==12){let N=new Uint8Array(12);N.set(o,Q?0:12-o.length),o=N,k.push(o)}let S=v(o);return OI(A,r,d,S,F,c,e,E),j(...k),c}}var z=(A,I)=>A[I++]&255|(A[I++]&255)<<8,sA=class{constructor(I){this.blockLen=16,this.outputLen=16,this.buffer=new Uint8Array(16),this.r=new Uint16Array(10),this.h=new Uint16Array(10),this.pad=new Uint16Array(8),this.pos=0,this.finished=!1,I=eA(I),V(I,32);let g=z(I,0),B=z(I,2),C=z(I,4),Q=z(I,6),E=z(I,8),i=z(I,10),o=z(I,12),F=z(I,14);this.r[0]=g&8191,this.r[1]=(g>>>13|B<<3)&8191,this.r[2]=(B>>>10|C<<6)&7939,this.r[3]=(C>>>7|Q<<9)&8191,this.r[4]=(Q>>>4|E<<12)&255,this.r[5]=E>>>1&8190,this.r[6]=(E>>>14|i<<2)&8191,this.r[7]=(i>>>11|o<<5)&8065,this.r[8]=(o>>>8|F<<8)&8191,this.r[9]=F>>>5&127;for(let c=0;c<8;c++)this.pad[c]=z(I,16+2*c)}process(I,g,B=!1){let C=B?0:2048,{h:Q,r:E}=this,i=E[0],o=E[1],F=E[2],c=E[3],e=E[4],D=E[5],k=E[6],t=E[7],y=E[8],r=E[9],d=z(I,g+0),f=z(I,g+2),S=z(I,g+4),N=z(I,g+6),x=z(I,g+8),a=z(I,g+10),w=z(I,g+12),G=z(I,g+14),H=Q[0]+(d&8191),U=Q[1]+((d>>>13|f<<3)&8191),J=Q[2]+((f>>>10|S<<6)&8191),q=Q[3]+((S>>>7|N<<9)&8191),p=Q[4]+((N>>>4|x<<12)&8191),K=Q[5]+(x>>>1&8191),M=Q[6]+((x>>>14|a<<2)&8191),l=Q[7]+((a>>>11|w<<5)&8191),Y=Q[8]+((w>>>8|G<<8)&8191),R=Q[9]+(G>>>5|C),n=0,X=n+H*i+U*(5*r)+J*(5*y)+q*(5*t)+p*(5*k);n=X>>>13,X&=8191,X+=K*(5*D)+M*(5*e)+l*(5*c)+Y*(5*F)+R*(5*o),n+=X>>>13,X&=8191;let m=n+H*o+U*i+J*(5*r)+q*(5*y)+p*(5*t);n=m>>>13,m&=8191,m+=K*(5*k)+M*(5*D)+l*(5*e)+Y*(5*c)+R*(5*F),n+=m>>>13,m&=8191;let u=n+H*F+U*o+J*i+q*(5*r)+p*(5*y);n=u>>>13,u&=8191,u+=K*(5*t)+M*(5*k)+l*(5*D)+Y*(5*e)+R*(5*c),n+=u>>>13,u&=8191;let W=n+H*c+U*F+J*o+q*i+p*(5*r);n=W>>>13,W&=8191,W+=K*(5*y)+M*(5*t)+l*(5*k)+Y*(5*D)+R*(5*e),n+=W>>>13,W&=8191;let $=n+H*e+U*c+J*F+q*o+p*i;n=$>>>13,$&=8191,$+=K*(5*r)+M*(5*y)+l*(5*t)+Y*(5*k)+R*(5*D),n+=$>>>13,$&=8191;let _=n+H*D+U*e+J*c+q*F+p*o;n=_>>>13,_&=8191,_+=K*i+M*(5*r)+l*(5*y)+Y*(5*t)+R*(5*k),n+=_>>>13,_&=8191;let AA=n+H*k+U*D+J*e+q*c+p*F;n=AA>>>13,AA&=8191,AA+=K*o+M*i+l*(5*r)+Y*(5*y)+R*(5*t),n+=AA>>>13,AA&=8191;let IA=n+H*t+U*k+J*D+q*e+p*c;n=IA>>>13,IA&=8191,IA+=K*F+M*o+l*i+Y*(5*r)+R*(5*y),n+=IA>>>13,IA&=8191;let gA=n+H*y+U*t+J*k+q*D+p*e;n=gA>>>13,gA&=8191,gA+=K*c+M*F+l*o+Y*i+R*(5*r),n+=gA>>>13,gA&=8191;let BA=n+H*r+U*y+J*t+q*k+p*D;n=BA>>>13,BA&=8191,BA+=K*e+M*c+l*F+Y*o+R*i,n+=BA>>>13,BA&=8191,n=(n<<2)+n|0,n=n+X|0,X=n&8191,n=n>>>13,m+=n,Q[0]=X,Q[1]=m,Q[2]=u,Q[3]=W,Q[4]=$,Q[5]=_,Q[6]=AA,Q[7]=IA,Q[8]=gA,Q[9]=BA}finalize(){let{h:I,pad:g}=this,B=new Uint16Array(10),C=I[1]>>>13;I[1]&=8191;for(let i=2;i<10;i++)I[i]+=C,C=I[i]>>>13,I[i]&=8191;I[0]+=C*5,C=I[0]>>>13,I[0]&=8191,I[1]+=C,C=I[1]>>>13,I[1]&=8191,I[2]+=C,B[0]=I[0]+5,C=B[0]>>>13,B[0]&=8191;for(let i=1;i<10;i++)B[i]=I[i]+C,C=B[i]>>>13,B[i]&=8191;B[9]-=8192;let Q=(C^1)-1;for(let i=0;i<10;i++)B[i]&=Q;Q=~Q;for(let i=0;i<10;i++)I[i]=I[i]&Q|B[i];I[0]=(I[0]|I[1]<<13)&65535,I[1]=(I[1]>>>3|I[2]<<10)&65535,I[2]=(I[2]>>>6|I[3]<<7)&65535,I[3]=(I[3]>>>9|I[4]<<4)&65535,I[4]=(I[4]>>>12|I[5]<<1|I[6]<<14)&65535,I[5]=(I[6]>>>2|I[7]<<11)&65535,I[6]=(I[7]>>>5|I[8]<<8)&65535,I[7]=(I[8]>>>8|I[9]<<5)&65535;let E=I[0]+g[0];I[0]=E&65535;for(let i=1;i<8;i++)E=(I[i]+g[i]|0)+(E>>>16)|0,I[i]=E&65535;j(B)}update(I){HA(this),I=eA(I),V(I);let{buffer:g,blockLen:B}=this,C=I.length;for(let Q=0;Q<C;){let E=Math.min(B-this.pos,C-Q);if(E===B){for(;B<=C-Q;Q+=B)this.process(I,Q);continue}g.set(I.subarray(Q,Q+E),this.pos),this.pos+=E,Q+=E,this.pos===B&&(this.process(g,0,!1),this.pos=0)}return this}destroy(){j(this.h,this.r,this.buffer,this.pad)}digestInto(I){HA(this),vA(I,this),this.finished=!0;let{buffer:g,h:B}=this,{pos:C}=this;if(C){for(g[C++]=1;C<16;C++)g[C]=0;this.process(g,0,!0)}this.finalize();let Q=0;for(let E=0;E<8;E++)I[Q++]=B[E]>>>0,I[Q++]=B[E]>>>8;return I}digest(){let{buffer:I,outputLen:g}=this;this.digestInto(I);let B=I.slice(0,g);return this.destroy(),B}};function WI(A){let I=(B,C)=>A(C).update(eA(B)).digest(),g=A(new Uint8Array(32));return I.outputLen=g.outputLen,I.blockLen=g.blockLen,I.create=B=>A(B),I}var gI=WI(A=>new sA(A));function CI(A,I,g,B,C,Q=20){let E=A[0],i=A[1],o=A[2],F=A[3],c=I[0],e=I[1],D=I[2],k=I[3],t=I[4],y=I[5],r=I[6],d=I[7],f=C,S=g[0],N=g[1],x=g[2],a=E,w=i,G=o,H=F,U=c,J=e,q=D,p=k,K=t,M=y,l=r,Y=d,R=f,n=S,X=N,m=x;for(let W=0;W<Q;W+=2)a=a+U|0,R=h(R^a,16),K=K+R|0,U=h(U^K,12),a=a+U|0,R=h(R^a,8),K=K+R|0,U=h(U^K,7),w=w+J|0,n=h(n^w,16),M=M+n|0,J=h(J^M,12),w=w+J|0,n=h(n^w,8),M=M+n|0,J=h(J^M,7),G=G+q|0,X=h(X^G,16),l=l+X|0,q=h(q^l,12),G=G+q|0,X=h(X^G,8),l=l+X|0,q=h(q^l,7),H=H+p|0,m=h(m^H,16),Y=Y+m|0,p=h(p^Y,12),H=H+p|0,m=h(m^H,8),Y=Y+m|0,p=h(p^Y,7),a=a+J|0,m=h(m^a,16),l=l+m|0,J=h(J^l,12),a=a+J|0,m=h(m^a,8),l=l+m|0,J=h(J^l,7),w=w+q|0,R=h(R^w,16),Y=Y+R|0,q=h(q^Y,12),w=w+q|0,R=h(R^w,8),Y=Y+R|0,q=h(q^Y,7),G=G+p|0,n=h(n^G,16),K=K+n|0,p=h(p^K,12),G=G+p|0,n=h(n^G,8),K=K+n|0,p=h(p^K,7),H=H+U|0,X=h(X^H,16),M=M+X|0,U=h(U^M,12),H=H+U|0,X=h(X^H,8),M=M+X|0,U=h(U^M,7);let u=0;B[u++]=E+a|0,B[u++]=i+w|0,B[u++]=o+G|0,B[u++]=F+H|0,B[u++]=c+U|0,B[u++]=e+J|0,B[u++]=D+q|0,B[u++]=k+p|0,B[u++]=t+K|0,B[u++]=y+M|0,B[u++]=r+l|0,B[u++]=d+Y|0,B[u++]=f+R|0,B[u++]=S+n|0,B[u++]=N+X|0,B[u++]=x+m|0}function PI(A,I,g,B){let C=A[0],Q=A[1],E=A[2],i=A[3],o=I[0],F=I[1],c=I[2],e=I[3],D=I[4],k=I[5],t=I[6],y=I[7],r=g[0],d=g[1],f=g[2],S=g[3];for(let x=0;x<20;x+=2)C=C+o|0,r=h(r^C,16),D=D+r|0,o=h(o^D,12),C=C+o|0,r=h(r^C,8),D=D+r|0,o=h(o^D,7),Q=Q+F|0,d=h(d^Q,16),k=k+d|0,F=h(F^k,12),Q=Q+F|0,d=h(d^Q,8),k=k+d|0,F=h(F^k,7),E=E+c|0,f=h(f^E,16),t=t+f|0,c=h(c^t,12),E=E+c|0,f=h(f^E,8),t=t+f|0,c=h(c^t,7),i=i+e|0,S=h(S^i,16),y=y+S|0,e=h(e^y,12),i=i+e|0,S=h(S^i,8),y=y+S|0,e=h(e^y,7),C=C+F|0,S=h(S^C,16),t=t+S|0,F=h(F^t,12),C=C+F|0,S=h(S^C,8),t=t+S|0,F=h(F^t,7),Q=Q+c|0,r=h(r^Q,16),y=y+r|0,c=h(c^y,12),Q=Q+c|0,r=h(r^Q,8),y=y+r|0,c=h(c^y,7),E=E+e|0,d=h(d^E,16),D=D+d|0,e=h(e^D,12),E=E+e|0,d=h(d^E,8),D=D+d|0,e=h(e^D,7),i=i+o|0,f=h(f^i,16),k=k+f|0,o=h(o^k,12),i=i+o|0,f=h(f^i,8),k=k+f|0,o=h(o^k,7);let N=0;B[N++]=C,B[N++]=Q,B[N++]=E,B[N++]=i,B[N++]=r,B[N++]=d,B[N++]=f,B[N++]=S}var bI=JA(CI,{counterRight:!1,counterLength:4,allowShortKeys:!1}),vI=JA(CI,{counterRight:!1,counterLength:8,extendNonceFn:PI,allowShortKeys:!1});var jI=new Uint8Array(16),BI=(A,I)=>{A.update(I);let g=I.length%16;g&&A.update(jI.subarray(g))},TI=new Uint8Array(32);function QI(A,I,g,B,C){let Q=A(I,g,TI),E=gI.create(Q);C&&BI(E,C),BI(E,B);let i=$A(B.length,C?C.length:0,!0);E.update(i);let o=E.digest();return j(Q,i),o}var iI=A=>(I,g,B)=>({encrypt(Q,E){let i=Q.length;E=SA(i+16,E,!1),E.set(Q);let o=E.subarray(0,-16);A(I,g,o,o,1);let F=QI(A,I,g,o,B);return E.set(F,i),j(F),E},decrypt(Q,E){E=SA(Q.length-16,E,!1);let i=Q.subarray(0,-16),o=Q.subarray(-16),F=QI(A,I,g,i,B);if(!TA(o,F))throw new Error("invalid tag");return E.set(Q.subarray(0,-16)),A(I,g,E,E,1),j(F),E}}),Zg=UA({blockSize:64,nonceLength:12,tagLength:16},iI(bI)),iA=UA({blockSize:64,nonceLength:24,tagLength:16},iI(vI));var{Keypair:KA,PublicKey:MA}=globalThis.solanaWeb3,oA=new TextEncoder,$I=new TextDecoder,lA=212,EI=oA.encode("SCK1"),_I=oA.encode("SABHA-CHAINKEY-NAME-V1\0"),Ag=oA.encode("SABHA-CHAINKEY-ENVELOPE-V1\0"),oI=Object.freeze({memoryKiB:65536,iterations:3,parallelism:1});function L(A,I){if(!A)throw new Error(I)}function Z(A){if(A instanceof Uint8Array)return A;if(A instanceof ArrayBuffer)return new Uint8Array(A);if(ArrayBuffer.isView(A))return new Uint8Array(A.buffer,A.byteOffset,A.byteLength);if(Array.isArray(A))return Uint8Array.from(A);throw new TypeError("Expected bytes")}function YA(...A){let I=A.map(Z),g=new Uint8Array(I.reduce((C,Q)=>C+Q.length,0)),B=0;for(let C of I)g.set(C,B),B+=C.length;return g}function nA(A,I){if(A=Z(A),I=Z(I),A.length!==I.length)return!1;let g=0;for(let B=0;B<A.length;B++)g|=A[B]^I[B];return g===0}function EA(A){return crypto.getRandomValues(new Uint8Array(A))}function Ig(A){let I="",g=Z(A);for(let B=0;B<g.length;B+=32768)I+=String.fromCharCode(...g.subarray(B,B+32768));return btoa(I)}function gg(A){let I=atob(String(A).replace(/\s+/g,""));return Uint8Array.from(I,g=>g.charCodeAt(0))}async function cI(A){return new Uint8Array(await crypto.subtle.digest("SHA-256",Z(A)))}function RA(A){let I=String(A??"").normalize("NFKC").trim().toLowerCase();return L(/^[a-z0-9][a-z0-9_-]{2,31}$/.test(I),"Username must be 3\u201332 characters: a\u2013z, 0\u20139, _ or -"),I}async function uA(A){return cI(YA(_I,oA.encode(RA(A))))}function FI(A,I=""){let g=String(A??""),B=[];return g.length<16&&B.push("use at least 16 characters"),g.length>256&&B.push("password is too long"),I&&g.toLowerCase().includes(RA(I))&&B.push("do not include the username"),/^(.)\1+$/.test(g)&&B.push("do not repeat one character"),/password|qwerty|123456|letmein|sabha/i.test(g)&&B.push("avoid common password patterns"),[/[a-z]/,/[A-Z]/,/\d/,/[^A-Za-z0-9]/].filter(C=>C.test(g)).length<3&&g.length<24&&B.push("use more variety or a longer password"),{ok:B.length===0,errors:B}}function tA(A){let I=new MA(A);return typeof A=="string"&&L(I.toBase58()===A,"Expected a canonical Solana public key"),I.toBytes()}function Bg(A){return new MA(Z(A)).toBase58()}function hI(A){return{addr:A.publicKey.toBase58(),sk:A.secretKey}}function Qg(){return hI(KA.generate())}function eI(A){let I=Z(A);return L(I.length===32,"Signing seed must be 32 bytes"),hI(KA.fromSeed(I))}function Cg(A){let I=Z(A.sk);return L(I.length===64,"Solana secret key must be 64 bytes"),I.slice(0,32)}function aI(A){try{A?.sk?.fill(0)}catch{}}function qA(A,I,g){new DataView(A.buffer,A.byteOffset,A.byteLength).setUint32(I,Number(g),!1)}function pA(A,I){return new DataView(A.buffer,A.byteOffset,A.byteLength).getUint32(I,!1)}async function DI(A,I,g){return WA({password:String(A).normalize("NFC"),salt:Z(I),iterations:Number(g.iterations),parallelism:Number(g.parallelism),memorySize:Number(g.memoryKiB),hashLength:32,outputType:"binary"})}function nI(A,I,g){return YA(Ag,A,I,g)}async function ig({name:A,password:I,seed:g,ownerAddress:B,networkHash:C,kdf:Q=oI}){let E=FI(I,A);L(E.ok,E.errors.join("; "));let i=await uA(A),o=tA(B),F=Z(C);L(F.length===32,"Network genesis hash must be 32 bytes"),L(Z(g).length===32,"Signing seed must be 32 bytes");let c=EA(16),e=EA(24),D=EA(24),k=EA(32),t;try{t=await DI(I,c,Q);let y=nI(i,o,F),r=iA(t,e,y).encrypt(k),d=iA(k,D,y).encrypt(Z(g));L(r.length===48&&d.length===48,"Unexpected AEAD length");let f=new Uint8Array(lA);return f.set(EI,0),f[4]=1,f[5]=1,f[6]=1,f[7]=0,qA(f,8,Q.memoryKiB),qA(f,12,Q.iterations),qA(f,16,Q.parallelism),f.set(c,20),f.set(F,36),f.set(e,68),f.set(D,92),f.set(r,116),f.set(d,164),f}finally{t?.fill(0),k.fill(0)}}function tI(A){let I=Z(A);return L(I.length===lA,`Unsupported ChainKey envelope length ${I.length}`),L(nA(I.subarray(0,4),EI),"Not a player recovery envelope"),L(I[4]===1,"Unsupported ChainKey version"),L(I[5]===1&&I[6]===1,"Unsupported cryptographic suite"),{version:I[4],kdf:{memoryKiB:pA(I,8),iterations:pA(I,12),parallelism:pA(I,16)},salt:I.slice(20,36),networkHash:I.slice(36,68),wrapNonce:I.slice(68,92),seedNonce:I.slice(92,116),wrappedDek:I.slice(116,164),encryptedSeed:I.slice(164,212)}}async function Eg({name:A,password:I,ownerAddress:g,envelope:B,expectedNetworkHash:C}){let Q=await uA(A),E=tA(g),i=tI(B);C&&L(nA(i.networkHash,Z(C)),"This player key belongs to a different Solana network");let o=nI(Q,E,i.networkHash),F,c,e,D;try{F=await DI(I,i.salt,i.kdf);try{c=iA(F,i.wrapNonce,o).decrypt(i.wrappedDek),e=iA(c,i.seedNonce,o).decrypt(i.encryptedSeed)}catch{throw new Error("Incorrect username or password, or corrupted on-chain recovery record")}return D=eI(e),L(nA(tA(D.addr),E),"Decrypted key does not match the on-chain owner"),{seed:e,account:D,networkHash:i.networkHash,kdf:i.kdf}}catch(k){throw e?.fill(0),aI(D),k}finally{F?.fill(0),c?.fill(0)}}globalThis.SabhaChainKey=Object.freeze({solana:Object.freeze({Keypair:KA,PublicKey:MA}),DEFAULT_KDF:oI,HEADER_SIZE:lA,te:oA,td:$I,assert:L,u8:Z,concat:YA,equalBytes:nA,randomBytes:EA,bytesToBase64:Ig,base64ToBytes:gg,sha256:cI,normalizeName:RA,nameHash:uA,validatePassword:FI,publicKeyBytes:tA,publicKeyAddress:Bg,generateAccount:Qg,accountFromSeed:eI,accountSeed:Cg,wipeAccount:aI,encryptSeed:ig,decryptSeed:Eg,parseEnvelope:tI});})();
 /*!
  * hash-wasm (https://www.npmjs.com/package/hash-wasm)
  * (c) Dani Biro
@@ -379,10 +1361,10 @@ const SabhaSol = (() => {
     4: 'The registry instruction was malformed.',
     5: 'The name was routed to the wrong registry shard.',
     6: 'The anti-bot proof was too weak.',
-    7: 'That player name already exists. Use Sign in instead.',
+    7: 'That username is taken. Use Sign in instead.',
     8: 'Sign-ups are full for this name right now. The registry needs its next capacity step.',
-    9: 'That player name is not in the registry.',
-    10: 'That player name belongs to a different key.',
+    9: 'That username does not exist yet.',
+    10: 'That username belongs to someone else.',
     11: 'Registry address mismatch.',
     12: 'The MagicBlock commit call failed.',
     13: 'Unknown registry instruction.',
@@ -470,7 +1452,7 @@ const SabhaSol = (() => {
         body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }),
         signal: ctl.signal
       });
-      if (!res.ok) throw new Error(`${method}: HTTP ${res.status} from ${cleanUrl(url)}`);
+      if (!res.ok) throw new Error(`${method}: HTTP ${res.status} from ${new URL(url).origin}`);
       const json = await res.json();
       if (json.error) {
         const error = new Error(json.error.message || `${method} failed`);
@@ -479,7 +1461,7 @@ const SabhaSol = (() => {
       }
       return json.result;
     } catch (error) {
-      if (error.name === 'AbortError') throw new Error(`${method}: no answer from ${cleanUrl(url)}`);
+      if (error.name === 'AbortError') throw new Error(`${method}: no answer from ${new URL(url).origin}`);
       throw error;
     } finally {
       clearTimeout(timer);
@@ -576,8 +1558,15 @@ const SabhaSol = (() => {
       return result(walk(groups, path, nameHash, [PROGRAM_ID]), 'MagicBlock ER');
     } catch (erError) {
       if (requireEr) throw new Error('Could not read the registry on the MagicBlock ER: ' + (erError?.message || erError));
-      await assertDevnet(baseUrl);
-      const groups = await readGroups(baseUrl, addresses);
+      let groups;
+      try {
+        await assertDevnet(baseUrl);
+        groups = await readGroups(baseUrl, addresses);
+      } catch (error) {
+        if (error instanceof TypeError || error.name === 'AbortError' || error.message.includes('no answer from'))
+          throw new Error('The MagicBlock registry lookup failed and Solana Devnet could not be reached. Try signing in again.');
+        throw error;
+      }
       if (!groups[0]) throw new Error('Registry shard not found.');
       return result(walk(groups, path, nameHash, [PROGRAM_ID, DELEGATION_PROGRAM]), 'Solana devnet (last commit)', erError);
     }
@@ -762,7 +1751,7 @@ const SabhaSol = (() => {
     if (!check.ok) throw new Error(check.errors.join('; '));
     await assertEr(erUrl);
     let found = await lookup(normalized, { erUrl, baseUrl, requireEr: true });
-    if (found.entry) throw new Error('That player name already exists. Use Sign in instead.');
+    if (found.entry) throw new Error('That username is taken. Use Sign in instead.');
     if (found.full) throw new Error(ERRORS[8]);
     const human = C.generateAccount();
     let keep = false;
@@ -783,18 +1772,19 @@ const SabhaSol = (() => {
           // another sign-up took the last free slot first: look again, the name moves on to the next step
           if (attempt >= 2 || ![8, 14].includes(error.code)) throw error;
           found = await lookup(normalized, { erUrl, baseUrl, requireEr: true });
-          if (found.entry) throw new Error('That player name already exists. Use Sign in instead.');
+          if (found.entry) throw new Error('That username is taken. Use Sign in instead.');
           if (found.full) throw new Error(ERRORS[8]);
         }
       }
       keep = true;
-      return { account: human, name: normalized, nameHash: found.nameHash, shard: found.shard, gen: found.gen, signature, proofAttempts: proof.attempts, proofElapsedMs: proof.elapsedMs };
+      return { account: human, name: normalized, nameHash: found.nameHash, shard: found.shard, gen: found.gen, envelope, signature, proofAttempts: proof.attempts, proofElapsedMs: proof.elapsedMs };
     } finally {
       if (!keep) C.wipeAccount(human);
     }
   }
   async function restorePlayer({ name, password, erUrl, baseUrl }) {
     const found = await lookup(name, { erUrl, baseUrl });
+    if (!found.entry && found.erError) throw new Error('MagicBlock could not confirm this player and the name was absent from the last Solana commit. Try signing in again.');
     if (!found.entry) throw new Error(`No player named "${found.normalized}" was found on the ${found.source}.`);
     const restored = await C.decryptSeed({ name: found.normalized, password, ownerAddress: new A.PublicKey(found.entry.owner).toBase58(), envelope: found.entry.envelope, expectedNetworkHash: GENESIS_BYTES });
     return { account: restored.account, name: found.normalized, nameHash: found.nameHash, shard: found.shard, gen: found.gen, slot: found.entry.slot, counter: found.entry.counter, source: found.source };
@@ -817,7 +1807,7 @@ const SabhaSol = (() => {
       const envelope = await C.encryptSeed({ name: found.normalized, password: newPassword, seed: C.accountSeed(account), ownerAddress: account.addr, networkHash: GENESIS_BYTES });
       if (envelope.length !== ENVELOPE) throw new Error('Unexpected ChainKey envelope size.');
       onProgress({ phase: 'send' });
-      const signature = await sendToEr(erUrl, account, [updateIx(playerKey(account), found.nameHash, envelope, found.shard)], 'Passphrase change');
+      const signature = await sendToEr(erUrl, account, [updateIx(playerKey(account), found.nameHash, envelope, found.shard)], 'Password change');
       keep = true;
       return { account, name: found.normalized, nameHash: found.nameHash, shard: found.shard, gen: found.gen, signature };
     } finally {
@@ -851,6 +1841,31 @@ const SabhaSol = (() => {
     }
     return false;
   }
+  // Smaran durability: a new player counts as saved only when the finalized Solana copy of the registry holds this
+  // exact player key and locked envelope. Commits are free on the rollup; asks for one, then again at most twice.
+  async function settleNewPlayer({ account, nameHash, shard, envelope, erUrl, baseUrl, timeoutMs = 60000 }) {
+    await assertDevnet(baseUrl);
+    const owner = playerKey(account), deadline = Date.now() + timeoutMs;
+    let commits = 0, nextCommit = 0;
+    while (Date.now() < deadline) {
+      try {
+        const result = await rpc(baseUrl, 'getAccountInfo', [groupOf(shard), { encoding: 'base64', commitment: 'finalized' }]);
+        const row = result?.value;
+        if (row && [PROGRAM_ID, DELEGATION_PROGRAM].includes(row.owner)) {
+          const data = C.base64ToBytes(row.data[0]);
+          const entry = data.length === SHARD_SIZE ? findEntry(data, nameHash) : null;
+          if (entry && C.equalBytes(entry.owner, owner) && C.equalBytes(entry.envelope, envelope)) return true;
+          if (entry && !C.equalBytes(entry.owner, owner)) throw Object.assign(new Error('That username was just taken by someone else. Choose another.'), { final: true });
+        }
+      } catch (error) { if (error.final) throw error; }
+      if (commits < 3 && Date.now() >= nextCommit) {
+        commits++; nextCommit = Date.now() + 15000;
+        commitShard({ shard, erUrl }).catch(() => {});
+      }
+      await sleep(2500);
+    }
+    return false;
+  }
   const erTxUrl = (sig, erUrl) => `https://explorer.solana.com/tx/${sig}?cluster=custom&customUrl=${encodeURIComponent(cleanUrl(erUrl))}`;
   const devnetAddressUrl = address => `https://explorer.solana.com/address/${address}?cluster=devnet`;
 
@@ -858,7 +1873,7 @@ const SabhaSol = (() => {
     PROGRAM_ID, DEVNET_GENESIS, ER_VALIDATOR, DELEGATION_PROGRAM, SHARDS, DEFAULT_ER, DEFAULT_BASE, NSHARDS, SLOTS, POW_BITS, MAX_GEN,
     stepSize, stepIndex, groupAddress,
     b58encode, b58decode, rpc, assertDevnet, assertEr, lookup, registryStatus, solveProof, compileMessage,
-    createPlayer, restorePlayer, changePassword, proveSigning, commitShard, waitForSolana, solanaAddress, erTxUrl, devnetAddressUrl
+    createPlayer, restorePlayer, changePassword, proveSigning, commitShard, waitForSolana, settleNewPlayer, solanaAddress, erTxUrl, devnetAddressUrl
   });
   globalThis.SabhaSol = api;
   return api;
@@ -912,17 +1927,22 @@ globalThis.SONet = (() => {
     return player;
   }
   async function login() {
-    const res = await fetch(`${TEE}/auth/challenge?pubkey=${player.b58}`);
+    const signer = player;
+    const res = await fetch(`${TEE}/auth/challenge?pubkey=${signer.b58}`, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error('MagicBlock match sign-in is unavailable (HTTP ' + res.status + '). Try again.');
     const { challenge, error } = await res.json();
     if (!challenge) throw new Error('MagicBlock TEE did not issue a challenge: ' + (error || res.status));
-    const signature = nacl.sign.detached(C.te.encode(challenge), player.account.sk);
-    const auth = await fetch(`${TEE}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pubkey: player.b58, challenge, signature: S.b58encode(signature) }) });
+    const signature = nacl.sign.detached(C.te.encode(challenge), signer.account.sk);
+    const auth = await fetch(`${TEE}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pubkey: signer.b58, challenge, signature: S.b58encode(signature) }), signal: AbortSignal.timeout(15000) });
+    if (!auth.ok) throw new Error('MagicBlock match sign-in was declined (HTTP ' + auth.status + '). Try again.');
     const json = await auth.json();
     if (auth.status !== 200 || !json.token) throw new Error('MagicBlock TEE login failed: ' + (json.error || auth.status));
-    token = json.token;
-    url = `${TEE}?token=${encodeURIComponent(token)}`;
-    const id = await S.rpc(url, 'getIdentity');
+    const sessionUrl = `${TEE}?token=${encodeURIComponent(json.token)}`;
+    const id = await S.rpc(sessionUrl, 'getIdentity');
     if (id?.identity !== TEE_VALIDATOR) throw new Error('SAFETY STOP: the private rollup endpoint is not the expected MagicBlock TEE validator.');
+    if (player !== signer) throw new Error('Player changed. Connect again.');
+    token = json.token;
+    url = sessionUrl;
     return token;
   }
   // text/plain body: no CORS preflight (the rollup sends no Access-Control-Max-Age, so preflights would add a round
@@ -958,12 +1978,12 @@ globalThis.SONet = (() => {
     blockhashAt = performance.now();
     return blockhash;
   }
-  function errorText(err) {
+  function errorText(err, map = ERRORS) {
     const code = err?.InstructionError?.[1]?.Custom;
-    if (code !== undefined) return ERRORS[code] || `Program error ${code}.`;
+    if (code !== undefined) return map[code] || `Program error ${code}.`;
     return typeof err === 'string' ? err : JSON.stringify(err);
   }
-  async function send(ixs, { label = 'Action', wait = true, fast = false } = {}) {
+  async function send(ixs, { label = 'Action', wait = true, fast = false, errors = ERRORS } = {}) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const message = S.compileMessage(player.key, ixs, await freshBlockhash(attempt > 0));
       const signature = nacl.sign.detached(message, player.account.sk);
@@ -973,16 +1993,16 @@ globalThis.SONet = (() => {
         await rpc('sendTransaction', [C.bytesToBase64(wire), { encoding: 'base64', skipPreflight: fast, preflightCommitment: 'processed' }]);
       } catch (e) {
         const code = e?.rpc?.data?.err;
-        const why = code ? errorText(code) : (e.message || String(e));
+        const why = code ? errorText(code, errors) : (e.message || String(e));
         if (attempt === 0 && /blockhash/i.test(why)) continue;
-        throw new Error(`${label}: ${why}`);
+        throw Object.assign(new Error(`${label}: ${why}`), { code: code?.InstructionError?.[1]?.Custom });
       }
       if (!wait) return sig;
       const deadline = performance.now() + 15000;
       while (performance.now() < deadline) {
         const st = (await rpc('getSignatureStatuses', [[sig]])).value[0];
         if (st) {
-          if (st.err) throw new Error(`${label}: ${errorText(st.err)}`);
+          if (st.err) throw Object.assign(new Error(`${label}: ${errorText(st.err, errors)}`), { code: st.err?.InstructionError?.[1]?.Custom });
           if (st.confirmationStatus) return sig;
         }
         await sleep(60);
@@ -1046,6 +2066,8 @@ globalThis.SONet = (() => {
       runs: [dv.getUint16(112, true), dv.getUint16(114, true)], wkts: [d[116], d[117]], balls: [d[118], d[119]],
       target: dv.getUint16(120, true), batFirst: d[122],
       last: { shot: d[124], grade: d[125], result: d[126], variation: d[127], delta: dv.getInt32(128, true), seq: dv.getUint32(132, true), wkind: d[136], pace: d[137], line: d[138], length: d[139], slot: dv.getUint32(140, true) },
+      matchSixes: d.length === 384 && d[320] === 1 ? [dv.getUint16(308,true),dv.getUint16(316,true)] : null,
+      matchFours: d.length === 384 && d[320] === 1 ? [dv.getUint16(306,true),dv.getUint16(314,true)] : null,
       hist, fours: [d[240], d[241]], sixes: [d[242], d[243]], created: Number(dv.getBigUint64(248, true)),
     };
   }
@@ -1111,7 +2133,103 @@ globalThis.SONet = (() => {
   const reclaimable = (s, slot) => s.phase === 'FREE' || (s.phase === 'FINISHED' && slot > s.deadline) || slot > s.deadline + 6000;
   async function currentSlot() { return rpc('getSlot', [{ commitment: 'processed' }]); }
 
+
+  // ------------------------------------------------------------ SMARAN PLAY relics (Boundary Hitter claim, VRF relic, gift)
+  // Every step is signed by the player's own Smaran key on the TEE rollup, which charges no fee; saves to Solana go
+  // through MagicBlock's fee vault. No server, no SOL.
+  const PLAY_ID = 'HUS4FPeXKqybWdZh4MGb6bjhH87A1oRCoSNQQck2SN5B';
+  const PLAY = pk(PLAY_ID);
+  const pdaOf = (...seeds) => A.PublicKey.findProgramAddressSync(seeds, new A.PublicKey(PLAY_ID))[0].toBytes();
+  const PLAY_REG = pdaOf(C.te.encode('play-reg')), PLAY_IDENTITY = pdaOf(C.te.encode('identity'));
+  const PLAY_ACH = [0, 1, 2, 3].map(i => pdaOf(C.te.encode('play-ach'), Uint8Array.of(i)));
+  const PLAY_REL = [0, 1, 2, 3].map(i => pdaOf(C.te.encode('play-rel'), Uint8Array.of(i)));
+  const FEE_VAULT = A.PublicKey.findProgramAddressSync([C.te.encode('magic-fee-vault'), pk(TEE_VALIDATOR)], new A.PublicKey('DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh'))[0].toBytes();
+  const MAGIC_CONTEXT_PK = pk('MagicContext1111111111111111111111111111111');
+  const PLAY_ERRORS = { 5: 'The match is not finished yet.', 6: 'Only a player of this match can claim.', 7: 'Boundary Hitter needs a four or a six in this match.', 8: 'This table has moved on to another match.', 14: 'Boundary Hitter is already claimed.', 15: 'All Boundary Hitter places are taken.', 16: 'Relics are not open yet.', 18: 'Magic Over relics are switched off.', 19: 'No Boundary Hitter achievement found.', 20: 'This achievement already has its relic.', 21: 'The relic draw is still running. Try again in a few seconds.', 23: 'Only the current keeper can give this relic.', 24: 'You already keep this relic.', 28: 'That table does not match.', 29: 'Already saved.', 30: 'The save reserve needs a refill.', 33: 'Saved a moment ago.' };
+  const playIx = (keys, data) => ({ programId: PLAY, keys, data });
+  async function playAccounts(list) {
+    const r = await rpc('getMultipleAccounts', [list.map(k => S.b58encode(k)), { encoding: 'base64', commitment: 'processed' }]);
+    return r.value.map(v => v ? C.base64ToBytes(v.data[0]) : null);
+  }
+  async function findSixHitter() {
+    const shards = await playAccounts(PLAY_ACH);
+    for (let i = 0; i < 4; i++) {
+      const d = shards[i];
+      if (!d) continue;
+      for (let o = 16; o + 96 <= d.length; o += 96)
+        if (d[o] === 1 && C.equalBytes(d.slice(o + 20, o + 52), player.key) && d[o + 2] === 1 && d[o + 3] === 0) return { shard: i, slot: (o - 16) / 96, flags: d[o + 1] };
+    }
+    return null;
+  }
+  async function relicsOf(key) {
+    const shards = await playAccounts(PLAY_REL), out = [];
+    shards.forEach((d, i) => {
+      if (!d) return;
+      for (let o = 16; o + 112 <= d.length; o += 112) if (d[o] === 1 && C.equalBytes(d.slice(o + 40, o + 72), key)) out.push({ shard: i, slot: (o - 16) / 112 });
+    });
+    return out;
+  }
+  const saveIx = account => playIx([meta(player.key, true, false), meta(account, false, true), meta(MAGIC_PROGRAM, false, false), meta(MAGIC_CONTEXT_PK, false, true), meta(FEE_VAULT, false, true)], Uint8Array.of(2));
+  async function savePlay(accounts) {
+    for (const a of accounts) await send([saveIx(a)], { label: 'Save', errors: PLAY_ERRORS }).catch(() => {});
+  }
+  async function finalizedHas(account, key, offset, stride) {
+    const r = await S.rpc(S.DEFAULT_BASE, 'getAccountInfo', [S.b58encode(account), { encoding: 'base64', commitment: 'finalized' }]).catch(() => null);
+    if (!r?.value) return false;
+    const d = C.base64ToBytes(r.value.data[0]);
+    for (let o = 16; o + stride <= d.length; o += stride) if (d[o] === 1 && C.equalBytes(d.slice(o + offset, o + offset + 32), key)) return true;
+    return false;
+  }
+  async function waitFinalized(account, key, offset, stride, ms = 120000) {
+    const end = performance.now() + ms;
+    while (performance.now() < end) { if (await finalizedHas(account, key, offset, stride)) return true; await sleep(4000); }
+    return false;
+  }
+  // Claim Boundary Hitter (a four or a six in a finished match, win or lose), draw the relic with MagicBlock VRF and
+  // save both to Solana.
+  // step(text) reports progress. Returns { relic: {shard, slot}, saved }.
+  async function claimSixHitter(idx, matchId, step = () => {}) {
+    if (!player || player.guest) throw new Error('Sign in to claim Boundary Hitter.');
+    if (!token) await login();
+    let at = await findSixHitter();
+    if (!at) {
+      step('Recording Boundary Hitter…');
+      const data = new Uint8Array(8); data[0] = 7; data[1] = 1; data[3] = idx; new DataView(data.buffer).setUint32(4, matchId >>> 0, true);
+      await send([playIx([meta(player.key, true, false), meta(PLAY_REG, false, false), ...PLAY_ACH.map(a => meta(a, false, true)), meta(TABLES[idx].state, false, false), meta(MAGIC_PROGRAM, false, false), meta(MAGIC_CONTEXT_PK, false, true), meta(FEE_VAULT, false, true)], data)], { label: 'Boundary Hitter', errors: PLAY_ERRORS });
+      for (let i = 0; i < 10 && !at; i++) { at = await findSixHitter(); if (!at) await sleep(500); }
+      if (!at) throw new Error('Boundary Hitter was recorded but could not be read back. Try again.');
+    }
+    const before = new Set((await relicsOf(player.key)).map(r => r.shard + ':' + r.slot));
+    if (at.flags !== 2) {
+      step('Drawing your relic with MagicBlock VRF…');
+      const data = Uint8Array.of(8, at.slot & 255, at.slot >> 8);
+      try {
+        await send([playIx([meta(player.key, true, true), meta(PLAY_ACH[at.shard], false, true), meta(PLAY_IDENTITY, false, false), meta(VRF_PROGRAM, false, false), meta(VRF_QUEUE, false, true), meta(SYSTEM, false, false), meta(SLOT_HASHES, false, false), meta(PLAY_REG, false, false)], data)], { label: 'Relic draw', errors: PLAY_ERRORS });
+      } catch (e) { if (e.code !== 21) throw e; }
+      for (let i = 0; i < 60; i++) { const a = await findSixHitter(); if (a?.flags === 2) { at = a; break; } await sleep(1500); }
+      if (at.flags !== 2) throw new Error('The relic draw has not come back yet. Press Claim again in a few seconds.');
+    }
+    const mine = await relicsOf(player.key);
+    const relic = mine.find(r => !before.has(r.shard + ':' + r.slot)) || mine[mine.length - 1] || null;
+    step('Saving to Solana…');
+    await savePlay([PLAY_ACH[at.shard], ...(relic ? [PLAY_REL[relic.shard]] : [])]);
+    const saved = relic ? await waitFinalized(PLAY_REL[relic.shard], player.key, 40, 112) : false;
+    return { relic, saved };
+  }
+  // Give a relic (shard, slot) to another Smaran player's key. The rollup saves it to Solana in the same transaction.
+  async function giveRelic(shard, slot, to, step = () => {}) {
+    if (!player || player.guest) throw new Error('Sign in to give a relic.');
+    if (!token) await login();
+    const data = new Uint8Array(35); data[0] = 10; data[1] = slot & 255; data[2] = slot >> 8; data.set(to, 3);
+    step('Giving…');
+    await send([playIx([meta(player.key, true, false), meta(PLAY_REL[shard], false, true), meta(MAGIC_PROGRAM, false, false), meta(MAGIC_CONTEXT_PK, false, true), meta(FEE_VAULT, false, true)], data)], { label: 'Give', errors: PLAY_ERRORS });
+    step('Saving to Solana…');
+    let saved = await waitFinalized(PLAY_REL[shard], to, 40, 112, 60000);
+    if (!saved) { await savePlay([PLAY_REL[shard]]); saved = await waitFinalized(PLAY_REL[shard], to, 40, 112, 60000); }
+    return { saved };
+  }
   return Object.freeze({
+    claimSixHitter, giveRelic, PLAY_ID,
     TEE, TABLES, FLIGHT, SLOT_MS, MODES, LEADERBOARD_PROGRAM, LEADERBOARD_ADDRESS, LEADERBOARD_FEE_VAULT, readLeaderboard, readRollupLeaderboard, readCommittedLeaderboard, parseLeaderboard, recordResult, waitForLeaderboardCommit, eligibleResult, setPlayer, login, get player() { return player; }, get clock() { return clock; },
     syncClock, slotNow, timeOfSlot, freshBlockhash, send, prepareShots, sendPreparedShot, I, readTable, readTables, battingSide, sideKey, reclaimable, currentSlot, sleep,
   });
@@ -3738,13 +4856,32 @@ globalThis.SOCompetition = (() => {
     verified.set(id, p);
     return p;
   }
-  async function enter(account, name, guest) {
+  function enter(account, name, guest) {
     N.setPlayer(account, name, guest);
-    await N.login();
-    await N.syncClock(8);
-    N.freshBlockhash(true).catch(() => {});
     $('who').textContent = guest ? 'Playing as guest' : `Signed in as ${name}`;
     $('whoKey').textContent = short(N.player.b58);
+    $('homeWho').textContent = guest ? 'Not signed in' : `Signed in as ${name}`;
+    $('btnHomeSign').textContent = guest ? 'Sign in' : 'Sign out';
+  }
+
+  let connecting;
+  function connectForPlay() {
+    const player = N.player;
+    if (connecting?.player === player) return connecting.ready;
+    const ready = (async () => {
+      try {
+        await N.login();
+        await N.syncClock(8);
+      } catch (error) {
+        if (error instanceof TypeError || error.name === 'TimeoutError' || error.name === 'AbortError')
+          throw new Error('Could not reach the MagicBlock match service. Try the play button again.');
+        throw error;
+      }
+      if (player !== N.player) throw new Error('Player changed. Open the match again.');
+      N.freshBlockhash(true).catch(() => {});
+    })().finally(() => { if (connecting?.player === player) connecting = null; });
+    connecting = { player, ready };
+    return ready;
   }
 
   // ------------------------------------------------------------ home
@@ -3752,16 +4889,34 @@ globalThis.SOCompetition = (() => {
     const b = $(id);
     busy(b, true, 'Opening the private rollup…');
     try {
-      if (!N.player) await enter(C.generateAccount(), 'Guest', true);
+      if (!N.player) enter(C.generateAccount(), 'Guest', true);
+      await connectForPlay();
       await createMatch(mode);
     } catch (e) { toast(e.message || String(e), 'bad'); }
     finally { busy(b, false); }
   };
+  let homeRelics, returningToRelics = false, returningHome = false;
+  async function enterFriendLobby() {
+    const button = $('btnFriend');
+    busy(button, true, 'Connecting to MagicBlock…');
+    try { await connectForPlay(); await openLobby(); }
+    catch (error) { toast(error.message || String(error), 'bad'); }
+    finally { busy(button, false); }
+  }
   $('btnFriend').onclick = () => {
-    if (N.player && !N.player.guest) { openLobby(); return; }
+    returningToRelics = false; returningHome = false;
+    if (N.player && !N.player.guest) return enterFriendLobby();
     show('auth');
   };
   for (const btn of document.querySelectorAll('[data-back]')) btn.onclick = () => show(btn.dataset.back);
+  // the account key lives only in this page's memory, so a fresh page is a clean sign-out
+  $('btnSignOut').onclick = () => location.reload();
+  $('btnHomeSign').onclick = () => {
+    if (N.player && !N.player.guest) return location.reload();
+    returningToRelics = false; returningHome = true;
+    authTab('in');
+    show('auth');
+  };
 
   // ------------------------------------------------------------ sign in / create (Sabha registry on MagicBlock ER, 0 SOL)
   $('authTabIn').onclick = () => authTab('in');
@@ -3769,15 +4924,19 @@ globalThis.SOCompetition = (() => {
   function authTab(which) {
     $('authTabIn').classList.toggle('on', which === 'in');
     $('authTabNew').classList.toggle('on', which === 'new');
+    $('authTabIn').setAttribute('aria-selected', String(which === 'in'));
+    $('authTabNew').setAttribute('aria-selected', String(which === 'new'));
+    $('authTitle').textContent = which === 'in' ? 'Sign in' : 'Create an account';
     $('confirmRow').hidden = which === 'in';
-    $('authGo').textContent = which === 'in' ? 'Sign in' : 'Create player';
+    $('authResetNote').hidden = which === 'in';
+    $('authGo').textContent = which === 'in' ? 'Sign in' : 'Create account';
     $('authForm').dataset.mode = which;
   }
   $('authForm').onsubmit = async ev => {
     ev.preventDefault();
     const b = $('authGo'), mode = $('authForm').dataset.mode || 'in';
     const name = $('authName').value, password = $('authPassword').value;
-    busy(b, true, mode === 'in' ? 'Opening your player ID…' : 'Securing your player ID…');
+    busy(b, true, mode === 'in' ? 'Signing in…' : 'Creating your account…');
     $('authMsg').textContent = '';
     try {
       let account, normalized;
@@ -3785,25 +4944,64 @@ globalThis.SOCompetition = (() => {
         if (password !== $('authConfirm').value) throw new Error('Passwords do not match.');
         const created = await S.createPlayer({ name, password, erUrl: S.DEFAULT_ER, baseUrl: S.DEFAULT_BASE, onProgress: p => { if (p.phase === 'proof') $('authMsg').textContent = `Anti-bot proof… ${(p.attempts || 0).toLocaleString()} attempts`; } });
         account = created.account; normalized = created.name;
-        S.commitShard({ account, shard: created.shard, erUrl: S.DEFAULT_ER }).catch(() => {});
+        $('authMsg').textContent = 'Saving your account to Solana so it works on any device…';
+        if (!await S.settleNewPlayer({ account, nameHash: created.nameHash, shard: created.shard, envelope: created.envelope, erUrl: S.DEFAULT_ER, baseUrl: S.DEFAULT_BASE }))
+          throw new Error('Your account was created but is not saved to Solana yet, so another device could not find it. Keep this page open and press the button again in a minute.');
       } else {
         const restored = await S.restorePlayer({ name, password, erUrl: S.DEFAULT_ER, baseUrl: S.DEFAULT_BASE });
         account = restored.account; normalized = restored.name;
       }
       $('authPassword').value = ''; $('authConfirm').value = '';
-      await enter(account, normalized, false);
-      openLobby();
+      enter(account, normalized, false);
+      show('home');
+      if (returningToRelics) {
+        returningToRelics = false;
+        homeRelics.openMine();
+      } else if (returningHome) {
+        returningHome = false;
+        toast(`Signed in as ${normalized}. Any match you play now can earn a relic.`);
+      } else await enterFriendLobby();
     } catch (e) { $('authMsg').textContent = e.message || String(e); }
     finally { busy(b, false); }
   };
 
   // ------------------------------------------------------------ lobby
   let lobbyTimer = 0;
-  void import("./relics/relics.mjs").then(({createRelicReader, mountRelicPanels}) => {
-    const reader = createRelicReader({ rpcUrl: "https://api.devnet.solana.com", programId: "3Nuw244n383T7CF8bTVaQqAw8Yt3aPnjgAGf68QRbhk4" });
+  // Boundary Hitter: the player's own decision to claim, signed with their Smaran key; no SOL anywhere.
+  let finishRelics = null;
+  function offerClaim(session, s, hint) {
+    const b = $('claimSix');
+    b.hidden = false;
+    b.disabled = false;
+    b.textContent = 'Claim Boundary Hitter relic';
+    b.onclick = async () => {
+      busy(b, true, 'Claiming…');
+      try {
+        const r = await N.claimSixHitter(session.idx, s.matchId, t => { hint.textContent = t; });
+        hint.textContent = r.saved ? 'Boundary Hitter relic saved on Solana. It shows in My relics in Magic Over, EternalBliss and SmaranWorld, and its holder keeps a village in SmaranWorld.' : 'Your relic is minted. Solana is still finalizing it; My relics shows it within a minute.';
+        b.hidden = true;
+        if (r.saved) finishRelics?.openMine();
+      } catch (e) {
+        hint.textContent = e.message || String(e);
+        busy(b, false);
+      }
+    };
+  }
+  const relicGive = {
+    find: async name => {
+      const f = await S.lookup(name, { erUrl: S.DEFAULT_ER, baseUrl: S.DEFAULT_BASE });
+      return f.entry ? { key: S.b58encode(f.entry.owner), name } : null;
+    },
+    send: (relic, key, step) => N.giveRelic(relic.shard, relic.slot, S.b58decode(key), step),
+  };
+  void Promise.resolve(globalThis.smaranRelics).then(({createRelicReader, mountRelicPanels}) => {
+    const reader = createRelicReader({ rpcUrl: "https://api.devnet.solana.com", programId: "HUS4FPeXKqybWdZh4MGb6bjhH87A1oRCoSNQQck2SN5B" });
     const currentPlayer = () => N.player?.guest ? null : N.player?.b58;
-    mountRelicPanels({ root: $('relicLobby'), read: reader, currentPlayer });
-    mountRelicPanels({ root: $('relicFinish'), read: reader, currentPlayer });
+    homeRelics = mountRelicPanels({ root: $('relicHome'), read: reader, currentPlayer, give: relicGive,
+      signIn: () => { returningToRelics = true; returningHome = false; authTab('in'); show('auth'); }
+    });
+    mountRelicPanels({ root: $('relicLobby'), read: reader, currentPlayer, give: relicGive });
+    finishRelics = mountRelicPanels({ root: $('relicFinish'), read: reader, currentPlayer, give: relicGive });
   }).catch(() => {});
   async function openLobby() {
     show('lobby');
@@ -3816,7 +5014,6 @@ globalThis.SOCompetition = (() => {
       const [tables, slot] = await Promise.all([N.readTables(), N.currentSlot()]);
       const open = tables.filter(t => t && t.phase === 'WAITING' && t.mode === 'PVP' && slot <= t.deadline && t.a !== N.player.b58);
       const list = $('openList');
-      const expanded = [...list.querySelectorAll('details[open]')].map(d => d.dataset.match);
       list.replaceChildren();
       if (!open.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'No open matches right now. Create one and share the code.'; list.appendChild(p); }
       for (const t of open) {
@@ -3829,18 +5026,6 @@ globalThis.SOCompetition = (() => {
         verifyName(t.aName, t.a).then(ok => { row.querySelector('.vf').textContent = ok ? '✓ Magic Over player' : 'unverified name'; });
         row.onclick = () => joinMatch(t.idx, t.matchId, row);
         list.appendChild(row);
-        const challenge = document.createElement('details');
-        challenge.className = 'relic-challenge';
-        challenge.dataset.match = t.idx + '-' + t.matchId;
-        challenge.open = expanded.includes(challenge.dataset.match);
-        const title = document.createElement('summary');
-        title.textContent = 'Relic Challenge';
-        const details = document.createElement('p');
-        details.textContent = 'Friend match ' + t.idx + '-' + t.matchId + ' · Six balls per side. Both players must approve the same terms.';
-        const offer = document.createElement('p');
-        offer.textContent = 'Relic offers are closed in this preview.';
-        challenge.append(title, details, offer);
-        list.appendChild(challenge);
       }
       $('freeCount').textContent = `${tables.filter(t => t && N.reclaimable(t, slot)).length} of ${tables.length} tables free`;
     } catch (e) { $('freeCount').textContent = 'Could not read tables: ' + (e.message || e); }
@@ -4056,7 +5241,7 @@ globalThis.SOCompetition = (() => {
         }
         break;
       case 'LIVE':
-        if (r.batting) showBatPad(); else status('Ball in the air…');
+        if (r.batting && !session.live?.played) showBatPad(); else status('Ball in the air…');
         break;
       case 'AI_SHOT':
         status(r.me === 0 ? 'The AI is reading your ball (MagicBlock VRF)…' : 'The AI is reading the ball (MagicBlock VRF)…');
@@ -4137,6 +5322,44 @@ globalThis.SOCompetition = (() => {
   }
 
   // ------------------------------------------------------------ delivery and batting
+// Uses the public delivery description and the same nominal arrival time as the ball animation.
+function createBattingGuide(root, playShot) {
+    const swing = root.querySelector('button');
+    const fill = root.querySelector('.arrival-fill');
+    const names = ['Defend','Drive','Cut','Pull','Loft'];
+    let suggested = 0, flight;
+    function stop() {
+        root.hidden = true;
+        flight?.cancel();
+        flight = null;
+    }
+    swing.addEventListener('pointerdown', event => {
+        if (event.isPrimary && event.button === 0) {
+            event.preventDefault();
+            playShot(suggested);
+        }
+    });
+    swing.addEventListener('click', event => {
+        if (event.detail === 0) playShot(suggested); // keyboard or assistive technology
+    });
+    return {
+        stop,
+        start({length,line,pace,releaseAt,arriveAt}) {
+            stop();
+            if (length === 0) suggested = 0;
+            else if (length === 1) suggested = pace === 0 ? 4 : 1;
+            else if (length === 3) suggested = line < 2 ? 2 : 3;
+            else suggested = line === 0 ? 2 : line === 3 ? 3 : 1;
+            swing.textContent = 'Swing · ' + names[suggested];
+            root.hidden = false;
+            flight = fill.animate([{transform:'scaleX(0)'},{transform:'scaleX(1)'}],{
+                duration:Math.max(1,arriveAt-releaseAt),delay:releaseAt-performance.now(),fill:'both'
+            });
+        }
+    };
+}
+
+  const battingGuide = createBattingGuide($('battingGuide'), playShot);
   function startDelivery(session, s, r) {
     hidePads();
     V.resetStumps(); V.resetBat();
@@ -4144,6 +5367,8 @@ globalThis.SOCompetition = (() => {
     const releaseAt = N.timeOfSlot(s.release) - up;
     const arriveAt = N.timeOfSlot(s.release + N.FLIGHT[s.pace]) - up;
     const live = session.live = { seq: s.seq, releaseAt, arriveAt, played: false, pace: s.pace, line: s.line, length: s.length, batting: r.batting };
+    if (r.batting && vsAi(s)) battingGuide.start(live);
+    else battingGuide.stop();
     if (r.batting) N.prepareShots(session.idx, s.seq).catch(() => {});
     dbg('delivery', { seq: s.seq, release: s.release, slotNow: N.slotNow(), releaseIn: releaseAt - performance.now(), arriveIn: arriveAt - performance.now(), upMs: N.clock.upMs });
     V.playBowler(releaseAt, s.pace);
@@ -4167,7 +5392,7 @@ globalThis.SOCompetition = (() => {
       kick(session);
     }, Math.max(0, arriveAt + LAST_CHANCE_MS - performance.now()));
     const desc = `${PACES[s.pace]} · ${LENGTHS[s.length].toLowerCase()} · ${LINES[s.line].toLowerCase()}`;
-    status(r.batting ? `${desc}. Play your shot as the ball reaches the bat.` : desc);
+    status(r.batting ? `${desc} · plus a hidden variation` : desc); // pace, line and length are public; swing, spin or a slower ball stays on the private rollup
     $('banner').className = 'banner';
     if (r.batting) showBatPad();
   }
@@ -4177,22 +5402,23 @@ globalThis.SOCompetition = (() => {
     const now = performance.now();
     if (now < session.live.releaseAt + 100) return;
     session.live.played = true;
+    battingGuide.stop();
     session.live.shot = shot;
     if (shot <= 4) session.live.freezeU = V.strike(SWING_FOR[shot], now); // null when it will clearly miss
     else V.swing(SWING_FOR[shot], 240);
-    document.querySelectorAll('#batPad button').forEach(b => b.classList.toggle('picked', Number(b.dataset.shot) === shot));
+    document.querySelectorAll('#batPad [data-shot]').forEach(b => b.classList.toggle('picked', Number(b.dataset.shot) === shot));
     const t0 = performance.now();
     dbg('tap', { seq: session.live.seq, slotNow: N.slotNow(), vsArrive: t0 - session.live.arriveAt });
     N.sendPreparedShot(session.idx, session.live.seq, shot).then(() => dbg('sent', { ms: performance.now() - t0 })).catch(e => { dbg('sendfail', e.message); toast(e.message, 'bad'); });
     kick(session);
   }
-  for (const b of document.querySelectorAll('#batPad button')) b.onpointerdown = ev => { ev.preventDefault(); playShot(Number(b.dataset.shot)); };
+  for (const b of document.querySelectorAll('#batPad [data-shot]')) b.onpointerdown = ev => { ev.preventDefault(); playShot(Number(b.dataset.shot)); };
   addEventListener('keydown', ev => {
     if ($('match').hidden || ev.target.tagName === 'INPUT') return;
     const map = { ArrowDown: 0, KeyS: 0, Space: 1, KeyW: 1, ArrowLeft: 2, KeyA: 2, ArrowRight: 3, KeyD: 3, ArrowUp: 4, KeyE: 4, KeyL: 5, Escape: 5, Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4, Digit6: 5 };
     if (ev.code in map) { ev.preventDefault(); playShot(map[ev.code]); }
   });
-  function showBatPad() { $('batPad').hidden = false; $('bowlPad').hidden = true; document.querySelectorAll('#batPad button').forEach(b => b.classList.remove('picked')); }
+  function showBatPad() { $('batPad').hidden = false; $('bowlPad').hidden = true; document.querySelectorAll('#batPad [data-shot]').forEach(b => b.classList.remove('picked')); }
   function hidePads() { $('batPad').hidden = true; $('bowlPad').hidden = true; }
 
   // The board as it stood after the ball that ended an innings: the state before that ball, plus the ball.
@@ -4313,6 +5539,7 @@ globalThis.SOCompetition = (() => {
     hidePads();
     status('');
     $('btnAgain').hidden = watching;
+    $('claimSix').hidden = true;
     $('btnAgain').textContent = s.mode === 'PVP' ? 'Rematch with this friend' : 'Play again';
     $('rematchStatus').textContent = s.mode === 'PVP' && !watching ? 'Both players choose Rematch. The same table resets after the result.' : '';
     setTimeout(() => {
@@ -4323,6 +5550,15 @@ globalThis.SOCompetition = (() => {
       else if (s.mode === 'AI') title = s.winner === 1 ? (watching ? `${nameOf(s, 0)} chased it down` : 'You chased it down!') : 'The AI defended its total';
       else title = s.winner - 1 === meSide ? 'You won the Magic Over!' : `${nameOf(s, s.winner - 1)} won the Magic Over`;
       $('finishTitle').textContent = title;
+      const hint = $('sixHitterResult');
+      hint.hidden = watching;
+      if (!watching) {
+        const boundaries = s.matchSixes && s.matchFours ? s.matchSixes[meSide] + s.matchFours[meSide] : null;
+        if (N.player?.guest) hint.textContent = 'Boundary Hitter needs a signed-in player. Sign in before your next match.';
+        else if (boundaries === null) hint.textContent = 'Boundary Hitter: this table has no verifiable boundary count.';
+        else if (boundaries > 0) { hint.textContent = 'You hit a boundary. Boundary Hitter is yours to claim, win or lose.'; offerClaim(session, s, hint); }
+        else hint.textContent = 'Hit a four or a six in any match for Boundary Hitter. You do not need to win.';
+      }
       const lines = [];
       if (s.mode === 'AI') lines.push(`Target ${s.target}. ${watching ? nameOf(s, 0) : 'You'} scored ${s.runs[0]}/${s.wkts[0]} in ${s.balls[0]} balls.`);
       else {

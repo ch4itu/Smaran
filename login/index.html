@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smaran login</title>
 <meta name="description" content="Smaran: a username-and-password login for Solana apps. One account for every Smaran app. No wallet, no seed phrase, no SOL.">
-<link rel="stylesheet" href="../blitz/arcade.css">
+<link rel="stylesheet" href="../arcade.css">
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--px-paper); color: var(--px-ink); font: 22px/1.25 var(--px-body); -webkit-font-smoothing: none; }
@@ -103,11 +103,11 @@
   <section class="card">
     <h2>Use it in an app</h2>
     <ul class="apps">
-      <li><a href="../blitz/magic-over/">Magic Over</a>: 3D cricket duels. One four or six earns a relic.</li>
-      <li><a href="../blitz/eternalbliss/">EternalBliss</a>: an RPG with shared worlds and duels.</li>
-      <li><a href="../blitz/smaranworld/">SmaranWorld</a>: one shared world with 144 villages for relic holders.</li>
-      <li><a href="../blitz/ludo-freeflow/">Ludo Freeflow</a>: four-colour Ludo with no turns.</li>
-      <li><a href="../blitz/streaks/">Smaran Streaks</a>: daily habits, one check-in a day.</li>
+      <li><a href="../magic-over/">Magic Over</a>: 3D cricket duels. One four or six earns a relic.</li>
+      <li><a href="../eternalbliss/">EternalBliss</a>: an RPG with shared worlds and duels.</li>
+      <li><a href="../smaranworld/">SmaranWorld</a>: one shared world with 144 villages for relic holders.</li>
+      <li><a href="../ludo-freeflow/">Ludo Freeflow</a>: four-colour Ludo with no turns.</li>
+      <li><a href="../streaks/">Smaran Streaks</a>: daily habits, one check-in a day.</li>
     </ul>
   </section>
 
@@ -125,7 +125,7 @@
     <ul class="points">
       <li><b>No password reset.</b> Nobody, us included, can recover a forgotten password. Choose one you will remember, at least 16 characters.</li>
       <li><b>A login, not a wallet.</b> The locked copy is public, so a weak password can be guessed offline. That is why Smaran accounts hold no money.</li>
-      <li><b>No login server.</b> Logins are kept on Solana and the pages are open source, so you can still sign in if we stop. Saving to Solana is paid from a <a href="https://github.com/ch4itu/MagicOver/tree/main/programs/save-fund">save fund</a> that anyone can add SOL to.</li>
+      <li><b>No login server.</b> Logins are kept on Solana and the pages are open source, so you can still sign in if we stop. Saving to Solana is paid from a <a href="https://github.com/ch4itu/Smaran/tree/main/programs/save-fund">save fund</a> that anyone can add SOL to.</li>
       <li><b>Solana Devnet today:</b> a test network, which can be reset.</li>
     </ul>
   </section>
@@ -133,16 +133,16 @@
   <section class="card">
     <h2>Add Smaran to your app</h2>
     <p class="hint">Open Smaran's sign-in window from a click. The password stays on Smaran's page, and your app gets the player's name and key and the signatures they approve.</p>
-<pre><code>&lt;script src="https://ch4itu.github.io/MagicOver/smaran/connect.js"&gt;&lt;/script&gt;
+<pre><code>&lt;script src="https://ch4itu.github.io/Smaran/login/connect.js"&gt;&lt;/script&gt;
 
 const player = await SmaranConnect.connect();
 player.name;       // their username
 player.publicKey;  // their Solana address
 await player.signTransaction(tx);</code></pre>
-    <p class="hint">Or load <code>smaran.js</code> and sign in on your own page, as these apps do. Both ways, with the pros and cons: <a href="https://github.com/ch4itu/MagicOver/tree/main/smaran">the guide</a>.</p>
+    <p class="hint">Or load <code>smaran.js</code> and sign in on your own page, as these apps do. Both ways, with the pros and cons: <a href="https://github.com/ch4itu/Smaran/tree/main/login">the guide</a>.</p>
   </section>
 
-  <p class="status"><a href="../blitz/">All Smaran apps</a> · <a href="https://github.com/ch4itu/MagicOver">Source code</a> (MIT)</p>
+  <p class="status"><a href="../">All Smaran apps</a> · <a href="https://github.com/ch4itu/Smaran">Source code</a> (MIT)</p>
 </main>
 <script src="smaran.js"></script>
 <script>

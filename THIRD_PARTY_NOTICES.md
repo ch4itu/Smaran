@@ -2,7 +2,7 @@
 
 The Three.js and TweetNaCl bundles retain their submitted code. The Solana SDK and dedicated recovery module were bundled for the Solana identity update. Existing license banners are preserved. The project MIT license does not replace third-party licenses.
 
-`smaran/smaran.js` contains the same Solana web3.js 1.98.4, hash-wasm, noble-ciphers and TweetNaCl code as `index.html`, copied unchanged by `smaran/build.py`, under the licenses below.
+`login/smaran.js` contains the same Solana web3.js 1.98.4, hash-wasm, noble-ciphers and TweetNaCl code as `magic-over/index.html`, copied unchanged by `login/build.py`, under the licenses below.
 
 ## Three.js r149
 

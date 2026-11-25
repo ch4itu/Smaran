@@ -2,7 +2,7 @@
 
 A shared world on Smaran login: the Alderlands, 144 villages in open country, where signed-in players see each other walk and talk, on one clock for everyone.
 
-[Play it](https://ch4itu.github.io/MagicOver/blitz/smaranworld/) · More on all the Smaran apps: [blitz/README.md](../README.md)
+[Play it](https://ch4itu.github.io/Smaran/smaranworld/) · More on all the Smaran apps: [BLITZ.md](../BLITZ.md)
 
 - **Walk and talk.** Sign in with the same username and password as the other Smaran apps. Signed-in players see each other move, and what they say shows over their heads and in the chat. Guests can look around without being shown.
 - **144 villages.** Each village has a square with a monument stone in the middle, lanes, houses and, in farming country, fields. The villages lie ring by ring around the heart of the world: 4 at the heart, then rings of 12, 20, 28, 36 and 44.
@@ -30,14 +30,14 @@ The whole map is made in the browser from one fixed seed when the page opens, in
 ## Who it is for, who pays, how long it lasts
 
 - **For people who will never touch crypto,** and for places where buying or holding it is banned, restricted, heavily taxed or legally unclear. Players use a username and a password in any browser, on a phone or a computer. They never buy, hold or send any coin or token, there is no KYC step, and nothing has cash value. This is a design note, not legal advice.
-- **Who pays.** Players pay nothing, ever. Whoever runs the apps pays the chain costs, mostly once as account deposits, to be covered by non-intrusive ads only: a sponsor's name on a village sign, never anything that interrupts play. There are no ads in this demo, and the plan is not proven yet. Anyone can also send SOL to the [save fund](../../programs/save-fund), one address that can only pay for saving these apps' accounts to Solana. It is a gift, not an investment: nothing comes back.
-- **How long it lasts.** As long as Solana and MagicBlock run. No server: the page is static and open source, so anyone can host it, and the land needs nothing but the page. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](../README.md#built-to-outlive-us).
+- **Who pays.** Players pay nothing, ever. Whoever runs the apps pays the chain costs, mostly once as account deposits, to be covered by non-intrusive ads only: a sponsor's name on a village sign, never anything that interrupts play. There are no ads in this demo, and the plan is not proven yet. Anyone can also send SOL to the [save fund](../programs/save-fund), one address that can only pay for saving these apps' accounts to Solana. It is a gift, not an investment: nothing comes back.
+- **How long it lasts.** As long as Solana and MagicBlock run. No server: the page is static and open source, so anyone can host it, and the land needs nothing but the page. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](../BLITZ.md#built-to-outlive-us).
 
 ## On chain (Devnet)
 
 | | |
 | --- | --- |
-| Program | [`HPEA1Ht9rBnqEQVdaEQ9QuqwiWAbY6fgCKs2ZPuQvcCW`](https://explorer.solana.com/address/HPEA1Ht9rBnqEQVdaEQ9QuqwiWAbY6fgCKs2ZPuQvcCW?cluster=devnet), source in [`programs/city`](../../programs/city) |
+| Program | [`HPEA1Ht9rBnqEQVdaEQ9QuqwiWAbY6fgCKs2ZPuQvcCW`](https://explorer.solana.com/address/HPEA1Ht9rBnqEQVdaEQ9QuqwiWAbY6fgCKs2ZPuQvcCW?cluster=devnet), source in [`programs/city`](../programs/city) |
 | Players | `["city-room", 0]`: 42 players shown to each other at once |
 | Chat | `["city-chat", 0]`: the last 24 lines |
 | Village signs | `["city-sign", 0]` to `["city-sign", 4]`: 160 sign places |

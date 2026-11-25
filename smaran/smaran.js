@@ -1,5 +1,5 @@
 /*! Smaran 1.1.1: sign up for a Solana app with a player name and a passphrase.
- * Built by smaran/build.py from Magic Over (https://github.com/ch4itu/MagicOver). Project code: MIT.
+ * Built by smaran/build.py from Magic Over (https://github.com/ch4itu/Smaran). Project code: MIT.
  * Bundled: Solana web3.js 1.98.4, hash-wasm, noble-ciphers and TweetNaCl, under their own licenses
  * (see THIRD_PARTY_NOTICES.md in the repository). Load this file once; it defines the globals
  * solanaWeb3, SabhaChainKey, nacl, SabhaSol and Smaran. */
@@ -485,7 +485,7 @@ const SabhaSol = (() => {
         }
       }
       keep = true;
-      return { account: human, name: normalized, nameHash: found.nameHash, shard: found.shard, gen: found.gen, signature, proofAttempts: proof.attempts, proofElapsedMs: proof.elapsedMs };
+      return { account: human, name: normalized, nameHash: found.nameHash, shard: found.shard, gen: found.gen, envelope, signature, proofAttempts: proof.attempts, proofElapsedMs: proof.elapsedMs };
     } finally {
       if (!keep) C.wipeAccount(human);
     }
@@ -548,6 +548,31 @@ const SabhaSol = (() => {
     }
     return false;
   }
+  // Smaran durability: a new player counts as saved only when the finalized Solana copy of the registry holds this
+  // exact player key and locked envelope. Commits are free on the rollup; asks for one, then again at most twice.
+  async function settleNewPlayer({ account, nameHash, shard, envelope, erUrl, baseUrl, timeoutMs = 60000 }) {
+    await assertDevnet(baseUrl);
+    const owner = playerKey(account), deadline = Date.now() + timeoutMs;
+    let commits = 0, nextCommit = 0;
+    while (Date.now() < deadline) {
+      try {
+        const result = await rpc(baseUrl, 'getAccountInfo', [groupOf(shard), { encoding: 'base64', commitment: 'finalized' }]);
+        const row = result?.value;
+        if (row && [PROGRAM_ID, DELEGATION_PROGRAM].includes(row.owner)) {
+          const data = C.base64ToBytes(row.data[0]);
+          const entry = data.length === SHARD_SIZE ? findEntry(data, nameHash) : null;
+          if (entry && C.equalBytes(entry.owner, owner) && C.equalBytes(entry.envelope, envelope)) return true;
+          if (entry && !C.equalBytes(entry.owner, owner)) throw Object.assign(new Error('That username was just taken by someone else. Choose another.'), { final: true });
+        }
+      } catch (error) { if (error.final) throw error; }
+      if (commits < 3 && Date.now() >= nextCommit) {
+        commits++; nextCommit = Date.now() + 15000;
+        commitShard({ shard, erUrl }).catch(() => {});
+      }
+      await sleep(2500);
+    }
+    return false;
+  }
   const erTxUrl = (sig, erUrl) => `https://explorer.solana.com/tx/${sig}?cluster=custom&customUrl=${encodeURIComponent(cleanUrl(erUrl))}`;
   const devnetAddressUrl = address => `https://explorer.solana.com/address/${address}?cluster=devnet`;
 
@@ -555,7 +580,7 @@ const SabhaSol = (() => {
     PROGRAM_ID, DEVNET_GENESIS, ER_VALIDATOR, DELEGATION_PROGRAM, SHARDS, DEFAULT_ER, DEFAULT_BASE, NSHARDS, SLOTS, POW_BITS, MAX_GEN,
     stepSize, stepIndex, groupAddress,
     b58encode, b58decode, rpc, assertDevnet, assertEr, lookup, registryStatus, solveProof, compileMessage,
-    createPlayer, restorePlayer, changePassword, proveSigning, commitShard, waitForSolana, solanaAddress, erTxUrl, devnetAddressUrl
+    createPlayer, restorePlayer, changePassword, proveSigning, commitShard, waitForSolana, settleNewPlayer, solanaAddress, erTxUrl, devnetAddressUrl
   });
   globalThis.SabhaSol = api;
   return api;
@@ -594,8 +619,9 @@ globalThis.Smaran = (() => {
   // MagicBlock's rollup. onProgress gets { phase: 'encrypt' | 'proof' | 'send', attempts }.
   async function signUp({ name, passphrase, onProgress } = {}) {
     const made = await S.createPlayer({ name, password: passphrase, ...where, onProgress });
-    // ask the rollup to save the registry to Solana; sign-up does not wait for it
-    S.commitShard({ account: made.account, shard: made.shard, erUrl: where.erUrl }).catch(() => {});
+    // sign-up finishes only when the finalized Solana registry holds this exact player (recoverable on any device)
+    if (!await S.settleNewPlayer({ account: made.account, nameHash: made.nameHash, shard: made.shard, envelope: made.envelope, ...where }))
+      throw new Error('Your player was created but is not saved to Solana yet, so another device could not find it. Keep this page open and press the button again in a minute.');
     return player(made.account, made.name);
   }
 

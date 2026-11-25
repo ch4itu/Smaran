@@ -1,6 +1,6 @@
 # Smaran Streaks
 
-A daily habit check-in for anyone with a Smaran username: up to three habits, one check-in a day each. It is the one app here that is not a game, to show that the same username and password work for everyday apps too. Deployed on Solana Devnet as [`A98As1brXWi2DuJFChgat6bL9XbmaRRiF5vMFZswALoi`](https://explorer.solana.com/address/A98As1brXWi2DuJFChgat6bL9XbmaRRiF5vMFZswALoi?cluster=devnet). Its four groups run on MagicBlock's devnet rollup (devnet-as), the same rollup as the Smaran registry. The page is [`blitz/streaks`](../../blitz/streaks/).
+A daily habit check-in for anyone with a Smaran username: up to three habits, one check-in a day each. It is the one app here that is not a game, to show that the same username and password work for everyday apps too. Deployed on Solana Devnet as [`A98As1brXWi2DuJFChgat6bL9XbmaRRiF5vMFZswALoi`](https://explorer.solana.com/address/A98As1brXWi2DuJFChgat6bL9XbmaRRiF5vMFZswALoi?cluster=devnet). Its four groups run on MagicBlock's devnet rollup (devnet-as), the same rollup as the Smaran registry. The page is [`blitz/streaks`](../../streaks/).
 
 ## Rules
 

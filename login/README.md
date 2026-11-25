@@ -4,9 +4,9 @@
 
 Smaran lets a player sign up for a Solana app with a username and a password. There is no wallet app, no seed phrase and no SOL to buy. The same username and password bring the same player back on any device, and in any app that uses Smaran. Smaran is Sanskrit for remembering: remembering a username and a password is all a player needs. (This guide, like the code, calls the password a passphrase: at least 16 characters.)
 
-It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternalbliss/), SmaranWorld, Ludo Freeflow and Smaran Streaks run (all five: [blitz/README.md](../blitz/README.md)), packaged two ways for other sites: a sign-in window on Smaran's own page, so the site never sees the passphrase or the key, and one file, `smaran.js`, that a page can load.
+It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternalbliss/), SmaranWorld, Ludo Freeflow and Smaran Streaks run (all five: [BLITZ.md](../BLITZ.md)), packaged two ways for other sites: a sign-in window on Smaran's own page, so the site never sees the passphrase or the key, and one file, `smaran.js`, that a page can load.
 
-**Try it:** [ch4itu.github.io/MagicOver/smaran](https://ch4itu.github.io/MagicOver/smaran/). If you already use a Smaran app, sign in there with the same username and password and you get the same key. You can also change your password there.
+**Try it:** [ch4itu.github.io/Smaran/login](https://ch4itu.github.io/Smaran/login/). If you already use a Smaran app, sign in there with the same username and password and you get the same key. You can also change your password there.
 
 <p align="center"><img src="../media/preview-signin-window.gif" width="760" alt="A demo site opens Smaran's sign-in window; the player signs in and approves a message there, and the site never sees the passphrase or the key"></p>
 
@@ -28,7 +28,7 @@ It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternal
 
 - **For people who will never touch crypto,** and for places where buying or holding it is banned, restricted, heavily taxed or legally unclear. Players use a username and a password in any browser, on a phone or a computer. They never buy, hold or send any coin or token, there is no KYC step, and nothing has cash value. This is a design note, not legal advice.
 - **Who pays.** Players pay nothing, ever. Whoever runs the apps pays the chain costs, mostly once as account deposits, to be covered by non-intrusive ads only: a sponsor's name on a stadium board or a village sign, never anything that interrupts play. There are no ads in this demo, and the plan is not proven yet. Anyone can also send SOL to the [save fund](../programs/save-fund), one address that can only pay for saving these apps' accounts to Solana. It is a gift, not an investment: nothing comes back.
-- **How long it lasts.** As long as Solana and MagicBlock run, once the save fund has SOL, someone runs its refill script (anyone can, with a little SOL for fees) and our upgrade key is given up, which we plan for mainnet. No server: the pages are static and open source, so anyone can host them. Logins are stored on Solana with their storage paid up front, so players can still sign in if we stop. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](../blitz/README.md#built-to-outlive-us).
+- **How long it lasts.** As long as Solana and MagicBlock run, once the save fund has SOL, someone runs its refill script (anyone can, with a little SOL for fees) and our upgrade key is given up, which we plan for mainnet. No server: the pages are static and open source, so anyone can host them. Logins are stored on Solana with their storage paid up front, so players can still sign in if we stop. Devnet can be reset, so lasting records need mainnet. Details: [Built to outlive us](../BLITZ.md#built-to-outlive-us).
 
 ## How it works
 
@@ -43,7 +43,7 @@ It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternal
 - **The registry runs on MagicBlock's public rollup** (devnet-as, validator `MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57`). Its groups were created on Solana once and delegated to the rollup. Sign-up and password changes are rollup transactions, signed by the player's own key with 0 SOL, and they take effect at once.
 - **Saved to Solana.** After each change, the player's registry group asks MagicBlock to save it to Solana. MagicBlock saves an account 25 times per delegation for free, then charges 0.0001 SOL per save, which the group pays from its own reserve. The [save fund](../programs/save-fund) refills a reserve that runs low.
 - **Sign-in reads either copy.** A page reads the locked key from the rollup, or from the last copy saved on Solana when the rollup cannot be reached.
-- **Each app on Smaran uses MagicBlock for its own play:** see [blitz/README.md](../blitz/README.md#how-magicblock-is-used).
+- **Each app on Smaran uses MagicBlock for its own play:** see [BLITZ.md](../BLITZ.md#how-magicblock-is-used).
 
 ## Add it to your app
 
@@ -52,7 +52,7 @@ There are two ways. With the **sign-in window**, the player types the passphrase
 ### The sign-in window
 
 ```html
-<script src="https://ch4itu.github.io/MagicOver/smaran/connect.js"></script>
+<script src="https://ch4itu.github.io/Smaran/login/connect.js"></script>
 <script>
   signInButton.onclick = async () => {
     const player = await SmaranConnect.connect(); // opens Smaran's window; call it from a click
@@ -196,7 +196,7 @@ These are known gaps, not promises.
 
 ## Files
 
-- `smaran.js`: the file to load. It is built, not hand-written: `python3 smaran/build.py` copies the Solana web3.js, crypto, TweetNaCl and registry code unchanged from Magic Over's `index.html` and adds `api.js`. So the kit runs exactly the code the game runs.
+- `smaran.js`: the file to load. It is built, not hand-written: `python3 login/build.py` copies the Solana web3.js, crypto, TweetNaCl and registry code unchanged from Magic Over's `index.html` and adds `api.js`. So the kit runs exactly the code the game runs.
 - `api.js`: the small `Smaran` interface above.
 - `signin.html`: the sign-in window.
 - `connect.js`: the small file a site loads to open it. It has no dependencies; you can also copy it into your site.
