@@ -1,7 +1,7 @@
 //! SMARAN PLAY: program-validated achievements, VRF-backed relic rewards and an owner-signed relic ledger.
 //!
-//! PRIVATE BUILD. Not deployed. Written for the MagicBlock private rollup (TEE), on the same validator as the Magic Over
-//! tables it reads. Same runtime style as the other programs in this repository: no_std, no allocator, no SDK.
+//! Deployed on Solana Devnet as HUS4FPeXKqybWdZh4MGb6bjhH87A1oRCoSNQQck2SN5B. Written for the MagicBlock private rollup
+//! (TEE), on the same validator as the Magic Over tables it reads. Same runtime style as the other programs in this repository: no_std, no allocator, no SDK.
 //!
 //! Accounts (all PDAs of this program, all delegated to one validator):
 //!   registry  ["play-reg"]       512 bytes   admin, odds_frozen, up to 8 games, up to 8 relic kinds

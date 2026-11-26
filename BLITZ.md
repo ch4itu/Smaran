@@ -25,8 +25,8 @@ People never pay. Running costs are meant to come from non-intrusive ads only. O
 | Magic Over | Every match runs on the private rollup, so the bowler's hidden variation stays hidden from the batter until the ball is played. VRF picks the AI's choices. |
 | Relics and achievements | On the private rollup. The program reads the finished match from Magic Over's table there, and VRF draws which relic a player gets. |
 | EternalBliss | Shared worlds, duels and character books on the public rollup, saved to Solana every few minutes. |
-| SmaranWorld | Where players stand, what they say and each village's sign, on the public rollup. Who keeps a village comes from the relic records. |
-| Ludo Freeflow | Every table on the public rollup, and every die from VRF. |
+| SmaranWorld | Where players stand, what they say, and each village's sign and building plan, on the public rollup. Who keeps a village comes from the relic records. |
+| Ludo Freeflow | Every table and the leaderboard on the public rollup, and every die from VRF. |
 | Smaran Streaks | Check-ins on the public rollup, saved to Solana at most once an hour. |
 | Save fund | On Solana itself: it refills the accounts that pay MagicBlock for their saves to Solana. |
 

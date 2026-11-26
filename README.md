@@ -140,7 +140,7 @@ Keep up to three habits, one check-in a day. It shows the same login works for e
 
 | MagicBlock | What it does here |
 | --- | --- |
-| **Public rollup** (devnet-as) | Smaran logins, EternalBliss's worlds and duels, SmaranWorld's players, chat and signs, Ludo Freeflow's tables, Streaks' check-ins |
+| **Public rollup** (devnet-as) | Smaran logins, EternalBliss's worlds and duels, SmaranWorld's players, chat, signs and village plans, Ludo Freeflow's tables and leaderboard, Streaks' check-ins |
 | **Private rollup** (devnet-tee) | Every Magic Over match, the relics and achievements, and the leaderboard. A ball's hidden variation can be read only by a human bowler, never by the batter or a watcher |
 | **VRF** | The AI's choices in Magic Over, which relic a player gets, every Ludo die |
 | **0-SOL actions** | People sign every action on the rollups with a key that holds no SOL. No wallet, no fee |

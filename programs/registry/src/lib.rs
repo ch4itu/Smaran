@@ -1,4 +1,6 @@
-//! Sabha Vault Registry for Solana + MagicBlock Ephemeral Rollups.
+//! Smaran registry (usernames and password-locked keys) for Solana + MagicBlock Ephemeral Rollups. Deployed on Solana
+//! Devnet as CW9AQnTKvTnBfsdUChQiYKfCPhWb7FWkUWyVxv1iaN5P. Its seeds and log lines still say "sabha", the project's
+//! earlier name.
 //!
 //! Name-and-password onboarding: the browser keeps a random Ed25519 key,
 //! encrypts it (Argon2id + XChaCha20-Poly1305, SCK1 envelope) and stores the
