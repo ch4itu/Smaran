@@ -1,0 +1,19 @@
+I wanted to try a blockchain game on my laptop. The first screen asked me to connect a wallet. I could install one, but it would still be empty. So I found an exchange, showed my ID and bought some crypto. All that just to find out whether I liked the game.
+
+As it happens, I liked it. I wanted to carry on playing on my phone. There I was, setting up a wallet again. And when it logged me out, I had to sign in again. I understand opening a wallet to move money. But why should I have to visit an exchange to play a game?
+
+That’s why I made Smaran. It’s a login any Solana app can add. Pick a username and a strong password. No wallet to install, no seed phrase to write down, no crypto to buy. I want Smaran to be the easiest way into entertainment finance. Let me show you what one cricket shot can do.
+
+This is Magic Over. MagicBlock’s private rollup keeps the bowler’s variation hidden until the shot. Four runs! That boundary earned us a relic. MagicBlock’s verifiable random draw picked this Compass.
+
+Now we open EternalBliss, an adventure game, with the same login. There’s our Compass. Its entry even tells us which cricket match it came from.
+
+In SmaranWorld, whoever holds that Compass becomes the keeper of Briarstead and can write the village sign. We gave it to another player. Look at the monument now. That’s the new keeper’s name. Both players finished with zero SOL.
+
+Here’s Ludo Freeflow. Watch red and blue. They can both roll at once. MagicBlock draws each die, and its public rollup keeps the two boards in sync. Then I open Smaran Streaks and check off today’s reading. Same person, same login, even for an everyday habit.
+
+What happens if I stop running Smaran’s website? When you sign up, your browser creates a signing key. Once a copy is saved on Solana, locked with your password, someone else can host the sign-in page. You enter the same username and password and get the same account back. You never had to export a key or plan for me disappearing. There’s no Smaran login server. There’s also no password reset, so remember your passphrase and keep money in a separate wallet.
+
+Who pays? Today, we fund the apps on Devnet. Their reserves pay for saves to Solana, and anyone can top up the shared fund. On mainnet, I’d like a sponsor’s name on a cricket boundary board to help cover that cost. You could play the whole over without an ad interrupting it.
+
+If you’re building a Solana app, our sign-in window is open source. If you came to play, pick a name and face your first ball. Try Smaran on Solana Devnet.
