@@ -295,7 +295,7 @@ This repo moved here from [ch4itu/MagicOver](https://github.com/ch4itu/MagicOver
 
 ## Team
 
-**Chaitanya Kumar Jagabathula** ([ch4itu](https://github.com/ch4itu))
+**Chaitanya Kumar** ([ch4itu](https://github.com/ch4itu))
 
 ---
 
