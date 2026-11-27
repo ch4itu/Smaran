@@ -3,7 +3,7 @@
 
 **Play:** [ch4itu.github.io/Smaran](https://ch4itu.github.io/Smaran/) · **Video:** [Smaran demo](https://ch4itu.github.io/Smaran/media/smaran-blitz-demo.mp4) · **Judges:** [what is new this week](#for-the-judges-magicblock-solana-blitz-v10) · **Overview:** [main README](README.md)
 
-> **Smaran: one username and password for Solana apps. No wallet, no seed phrase, no crypto.**
+> **Smaran: one username and password for Solana apps. No wallet, no seed phrase, no crypto to buy or acquire.**
 
 ## The Problem
 
@@ -15,7 +15,7 @@ Smaran gives each person a Solana key, locked with their password and kept on So
 
 ## Sustainability
 
-People never pay. Running costs are meant to come from non-intrusive ads only. One [save fund](programs/save-fund), an address anyone can send SOL to, keeps the apps saving to Solana. There is no server to switch off, so the apps keep working as long as Solana and MagicBlock run ([what that depends on](#built-to-outlive-us)).
+People pay 0 SOL to use the featured apps on Devnet. Account reserves cover paid saves to Solana. The [shared save fund](programs/save-fund) replenishes eligible reserves when someone runs the refill. The caller covers refill transaction fees and delegation deposits. Non-interrupting sponsorships are a proposed way to cover future costs ([what that depends on](#built-to-outlive-us)).
 
 ## How MagicBlock Is Used
 

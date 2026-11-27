@@ -4,11 +4,11 @@
 
 Smaran lets a player sign up for a Solana app with a username and a password. There is no wallet app, no seed phrase and no SOL to buy. The same username and password bring the same player back on any device, and in any app that uses Smaran. Smaran is Sanskrit for remembering: remembering a username and a password is all a player needs. (This guide, like the code, calls the password a passphrase: at least 16 characters.)
 
-It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternalbliss/), SmaranWorld, Ludo Freeflow and Smaran Streaks run (all five: [BLITZ.md](../BLITZ.md)), packaged two ways for other sites: a sign-in window on Smaran's own page, so the site never sees the passphrase or the key, and one file, `smaran.js`, that a page can load.
+It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternalbliss/), SmaranWorld, Ludo Freeflow and Smaran Streaks run (all five: [BLITZ.md](../BLITZ.md)), packaged two ways for other sites: a sign-in window on Smaran's own page, which returns the username, public key and approved signatures to the requesting site, and one file, `smaran.js`, that a page can load.
 
 **Try it:** [ch4itu.github.io/Smaran/login](https://ch4itu.github.io/Smaran/login/). If you already use a Smaran app, sign in there with the same username and password and you get the same key. You can also change your password there.
 
-<p align="center"><img src="../media/preview-signin-window.gif" width="760" alt="A demo site opens Smaran's sign-in window; the player signs in and approves a message there, and the site never sees the passphrase or the key"></p>
+<p align="center"><img src="../media/preview-signin-window.gif" width="760" alt="A demo site opens Smaran's sign-in window; the player signs in and approves a message there, and the site receives the signature"></p>
 
 <p align="center"><sub>The sign-in window, opened by a demo site (game.example) and stepping through sign-in and one signature.</sub></p>
 
@@ -33,7 +33,7 @@ It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternal
 ## How it works
 
 1. **Sign up.** The browser makes a random signing key. It does not come from the passphrase.
-2. **Lock.** Argon2id (64 MiB of memory, three passes) turns the passphrase into a key that locks a copy of the signing key with XChaCha20-Poly1305. Each player gets a random salt, and the locked copy is tied to the player's name, public key and network, so it cannot be moved to another name or network. The passphrase never leaves the page.
+2. **Lock.** Argon2id (64 MiB of memory, three passes) turns the passphrase into a key that locks a copy of the signing key with XChaCha20-Poly1305. Each player gets a random salt, and the locked copy is tied to the player's name, public key and network, so it cannot be moved to another name or network. Registration submits the encrypted signing key, username hash and public key. The page that collects the passphrase has access to it.
 3. **Register.** After a small proof of work, the page stores three things in the player registry on MagicBlock's rollup: a hash of the name, the public key and the locked copy. The player's own new key signs this, with 0 SOL. The rollup then saves the player's registry group to Solana; each group pays for its own saves from a small reserve the sponsor put in it.
 4. **Sign in anywhere.** Another device or app reads the locked copy by the name, unlocks it in the browser with the passphrase, and checks the key matches the registered public key.
 5. **Change the passphrase.** A player who still knows the passphrase can lock the same key with a new one. Only that player's key can replace its locked copy, and the player key never changes.
@@ -47,7 +47,7 @@ It is the sign-up that [Magic Over](../MAGIC_OVER.md), [EternalBliss](../eternal
 
 ## Add it to your app
 
-There are two ways. With the **sign-in window**, the player types the passphrase on Smaran's own page, and your site never sees the passphrase or the key. With **smaran.js in your page**, your page unlocks the key itself: simpler, but players have to trust your site with their key.
+There are two ways. With the **sign-in window**, the player types the passphrase on Smaran's own page, and the window sends your site the username, public key and approved signatures. With **smaran.js in your page**, your page unlocks the key itself: simpler, but players have to trust your site with their key.
 
 ### The sign-in window
 

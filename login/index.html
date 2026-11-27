@@ -44,7 +44,7 @@
 <body>
 <main>
   <h1>SMARAN</h1>
-  <p class="lead"><b>A login for Solana apps that works like any website login:</b> a username and a password. No wallet. No seed phrase. No crypto to buy or acquire. No fees.</p>
+  <p class="lead"><b>A login for Solana apps that works like any website login:</b> a username and a password. No wallet. No seed phrase. No crypto to buy or acquire. You pay 0 SOL to sign in or use the featured apps.</p>
   <p class="lead"><a href="https://www.magicblock.xyz/">Powered by MagicBlock</a></p>
 
   <section class="card">
@@ -52,7 +52,7 @@
     <ul class="points">
       <li><b>One account for every Smaran app.</b> The same username and password sign you in to Magic Over, EternalBliss, SmaranWorld, Ludo Freeflow and Smaran Streaks, on a phone or a computer.</li>
       <li><b>What you earn is yours.</b> Your account is a real Solana key. A relic you win in Magic Over is stored on Solana under that key, so EternalBliss and SmaranWorld show it too.</li>
-      <li><b>Free, with nothing to buy.</b> You never buy, hold or send a coin or token, and nothing here has a cash value.</li>
+      <li><b>Who pays the fees?</b> On Devnet, the apps cover paid saves to Solana from their own reserves. The <a href="https://github.com/ch4itu/Smaran/tree/main/programs/save-fund">shared save fund</a> tops up eligible reserves. Whoever runs a refill pays its transaction fees and delegation deposit.</li>
     </ul>
   </section>
 
@@ -116,7 +116,7 @@
     <h2>How it works</h2>
     <ol class="steps">
       <li>When you create an account, your browser makes a new Solana key for you.</li>
-      <li>It locks a copy of that key with your password and stores the locked copy under your username on Solana. Your password never leaves your browser.</li>
+      <li>The sign-up page uses your password to encrypt a copy of your signing key in your browser. It sends your username hash, public key and encrypted copy to the registry on MagicBlock’s public rollup for saving to Solana. Your password is used on the page where you type it. Only use a sign-in page you trust.</li>
       <li>When you sign in, in any Smaran app on any device, the locked copy is fetched and your password unlocks it, in your browser. Same username and password, same key.</li>
     </ol>
   </section>
@@ -125,22 +125,22 @@
     <h2>Good to know</h2>
     <ul class="points">
       <li><b>No password reset.</b> Nobody, us included, can recover a forgotten password. Choose one you will remember, at least 16 characters.</li>
-      <li><b>A login, not a wallet.</b> The locked copy is public, so a weak password can be guessed offline. That is why Smaran accounts hold no money.</li>
-      <li><b>No login server.</b> Logins are kept on Solana and the pages are open source, so you can still sign in if we stop. Saving to Solana is paid from a <a href="https://github.com/ch4itu/Smaran/tree/main/programs/save-fund">save fund</a> that anyone can add SOL to.</li>
+      <li><b>A login, not a wallet.</b> The locked copy is public, so a weak password can be guessed offline. Choose a long, unique passphrase and keep money in a separate wallet.</li>
+      <li><b>Why the login is portable.</b> Once a copy is saved to Solana, another host can serve the open-source sign-in page. With your password and access to the saved record, you can unlock the same account.</li>
       <li><b>Solana Devnet today:</b> a test network, which can be reset.</li>
     </ul>
   </section>
 
   <section class="card">
     <h2>Add Smaran to your app</h2>
-    <p class="hint">Open Smaran's sign-in window from a click. The password stays on Smaran's page, and your app gets the player's name and key and the signatures they approve.</p>
+    <p class="hint">Open Smaran's sign-in window from a click. The window sends your app the username, public key and approved signatures. It uses the password inside the window to unlock the signing key.</p>
 <pre><code>&lt;script src="https://ch4itu.github.io/Smaran/login/connect.js"&gt;&lt;/script&gt;
 
 const player = await SmaranConnect.connect();
 player.name;       // their username
 player.publicKey;  // their Solana address
 await player.signTransaction(tx);</code></pre>
-    <p class="hint">Or load <code>smaran.js</code> and sign in on your own page, as these apps do. Both ways, with the pros and cons: <a href="https://github.com/ch4itu/Smaran/tree/main/login">the guide</a>.</p>
+    <p class="hint">Or load <code>smaran.js</code> and put the password field on your own page. In that setup your page handles the password and unlocked signing key, so users must trust its code. Both ways, with the pros and cons: <a href="https://github.com/ch4itu/Smaran/tree/main/login">the guide</a>.</p>
   </section>
 
   <p class="status"><a href="../">All Smaran apps</a> · <a href="https://github.com/ch4itu/Smaran">Source code</a> (MIT)</p>

@@ -37,7 +37,7 @@
 <body>
 <main>
   <h1 id="title">Sign in</h1>
-  <p class="note" style="margin-top:-6px">One username and password for every app with Smaran login. No wallet, no seed phrase, no crypto.</p>
+  <p class="note" style="margin-top:-6px">One username and password for every app with Smaran login. No wallet. No seed phrase. No crypto to buy or acquire.</p>
   <p class="site" id="site" hidden></p>
 
   <section class="card" id="stop" hidden>
@@ -317,7 +317,7 @@
       }
       appOrigin = e.origin;
       host = new URL(appOrigin).host;
-      $('formNote').textContent = `${host} will see your username and public key. It never sees your password or your key.`;
+      $('formNote').textContent = `${host} will see your username and public key. This window unlocks your signing key locally and sends the app only the signatures you approve after connecting.`;
       site('', ' wants you to sign in.');
       setMode('in');
       show('form');

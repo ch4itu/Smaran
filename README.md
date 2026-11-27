@@ -1,5 +1,5 @@
 # Smaran: One Login for Solana Apps
-### A simple login for sunset-proof apps. A username and a password: no wallet, no seed phrase, no crypto.
+### A simple login for sunset-proof apps. A username and a password: no wallet, no seed phrase, no crypto to buy or acquire.
 
 [![Registry on Solana Devnet](https://img.shields.io/badge/Registry-Solana%20Devnet-black)](https://explorer.solana.com/address/CW9AQnTKvTnBfsdUChQiYKfCPhWb7FWkUWyVxv1iaN5P?cluster=devnet)
 [![Built on MagicBlock](https://img.shields.io/badge/Rollups-MagicBlock-b33a2b)](https://docs.magicblock.gg)
@@ -75,7 +75,7 @@ Most people stop here                The same login works in every Smaran app
 
 1. The browser makes a new Solana key for the person. The key does not come from the password.
 2. It locks the key with the password (Argon2id and XChaCha20-Poly1305) and stores the locked copy in Smaran's registry on MagicBlock's public rollup, which saves it to Solana.
-3. On any device, the same username and password unlock it again, in the browser. No server ever sees the password.
+3. On any device, the same username and password unlock it again, in the browser. The registry receives an encrypted signing key. The page where you enter your password handles it locally.
 4. Apps then use that key on MagicBlock's rollups, where every action costs the person 0 SOL.
 
 Smaran is Sanskrit for remembering: all a person needs is to remember a username and a password. Full guide: [login/README.md](login/README.md).
@@ -171,7 +171,7 @@ Each app's README has its own "How MagicBlock is used" section.
 | --- | --- |
 | A wallet app or extension | A username and a password, in any modern browser, on a phone or a computer |
 | A seed phrase to write down | A password the person picks |
-| A login on the app company's server | No login server: the locked key is on Solana and the password never leaves the browser |
+| A login on the app company's server | No login server: the encrypted key is saved to Solana and the sign-in page unlocks it locally |
 | One account per app | One account for every Smaran app |
 | A fee on every action | 0 SOL for people, for every action on the rollups |
 | Progress in one app's database | Relics and records on Solana, under the person's own key |
@@ -204,7 +204,7 @@ Source for every program is in [`programs/`](programs) and [`eternalbliss/progra
 Open [ch4itu.github.io/Smaran](https://ch4itu.github.io/Smaran/), pick any app, press **Sign in** and create an account. Use the same username and password in the other apps.
 
 ### For app builders
-Add Smaran's sign-in window to your page. Your site never sees the password or the key, and the person approves every signature in Smaran's window:
+Add Smaran's sign-in window to your page. The window returns the username and public key to your site, and the person approves every signature in Smaran's window:
 
 ```html
 <script src="https://ch4itu.github.io/Smaran/login/connect.js"></script>
@@ -242,7 +242,7 @@ Everything else, including `smaran.js` for your own page: [login/README.md](logi
 ## Security and Limits
 
 ### Built-in protections
-- The password never leaves the browser, and the unlocked key is kept only in memory.
+- The standard sign-in code uses the password locally. An app embedding the library directly has access to the password and unlocked key.
 - Argon2id (64 MiB, three passes) makes each password guess slow; XChaCha20-Poly1305 locks the key.
 - A small proof of work slows sign-up bots.
 - Smaran's sign-in window shows the real address of the site asking, asks the person for every signature, and never signs a sign-up or password change for a site.
