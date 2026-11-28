@@ -1,4 +1,4 @@
-// Aggregate headers from the latest confirmed Devnet saves. One batched read per page.
+// Aggregate headers from the latest confirmed Devnet saves. One batched read per source.
 (async () => {
   const metrics = {
   "magic-over": [
@@ -96,7 +96,7 @@
     -1
   ],
   "ludo-freeflow": [
-    "online tables opened for a match",
+    "online matches opened",
     "LUDOFF01",
     [
       "8t7ZuVw2xyRSpt3JBoJBb7PWQq1qykoDZAzgjwrB452e",
@@ -120,33 +120,39 @@
   ]
 };
   const labels = Array.from(document.querySelectorAll('[data-smaran-total]'));
-  const keys = labels.flatMap(label => metrics[label.dataset.smaranTotal][2]);
-  if (!keys.length) return;
-  try {
-    const response = await fetch('https://api.devnet.solana.com', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({jsonrpc:'2.0', id:1, method:'getMultipleAccounts', params:[keys,
-        {encoding:'base64', commitment:'confirmed', dataSlice:{offset:0,length:24}}]}),
-      signal: AbortSignal.timeout(9000)
-    });
-    if (!response.ok) return;
-    const accounts = (await response.json()).result?.value;
-    if (!Array.isArray(accounts) || accounts.length !== keys.length) return;
-    let cursor = 0;
-    for (const label of labels) {
-      const [unit, magic, addresses, offset] = metrics[label.dataset.smaranTotal];
-      const group = accounts.slice(cursor, cursor + addresses.length);
-      cursor += addresses.length;
-      const present = group.filter(Boolean);
-      if (!present.length) continue;
-      const headers = present.map(a => atob(a.data[0]));
-      if (!headers.every(h => h.length === 24 && h.startsWith(magic))) continue;
-      let count = 0;
-      for (const h of headers) {
-        count += offset < 0 ? 1 : new DataView(Uint8Array.from(h, c => c.charCodeAt(0)).buffer).getUint32(offset,true);
+  async function read(groups, endpoint, source) {
+    if (!groups.length) return;
+    const keys = groups.flatMap(label => metrics[label.dataset.smaranTotal][2]);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({jsonrpc:'2.0', id:1, method:'getMultipleAccounts', params:[keys,
+          {encoding:'base64', commitment:'confirmed', dataSlice:{offset:0,length:24}}]}),
+        signal: AbortSignal.timeout(12000)
+      });
+      if (!response.ok) return;
+      const accounts = (await response.json()).result?.value;
+      if (!Array.isArray(accounts) || accounts.length !== keys.length) return;
+      let cursor = 0;
+      for (const label of groups) {
+        const [unit, magic, addresses, offset] = metrics[label.dataset.smaranTotal];
+        const present = accounts.slice(cursor, cursor + addresses.length).filter(Boolean);
+        cursor += addresses.length;
+        if (!present.length || label.dataset.source === 'live rollup') continue;
+        const headers = present.map(a => atob(a.data[0]));
+        if (!headers.every(h => h.length === 24 && h.startsWith(magic))) continue;
+        let count = 0;
+        for (const h of headers) {
+          count += offset < 0 ? 1 : new DataView(Uint8Array.from(h, c => c.charCodeAt(0)).buffer).getUint32(offset,true);
+        }
+        label.textContent = count.toLocaleString() + ' ' + unit + ' · Devnet, ' + source;
+        label.dataset.source = source;
+        label.hidden = false;
       }
-      label.textContent = count.toLocaleString() + ' ' + unit + ' · Devnet saves';
-      label.hidden = false;
-    }
-  } catch { /* Public counters are optional when the RPC is unavailable. */ }
+    } catch { /* A failed read leaves the available source on screen. */ }
+  }
+  await Promise.all([
+    read(labels, 'https://api.devnet.solana.com', 'last Solana save'),
+    read(labels.filter(label => label.dataset.smaranTotal !== 'magic-over'), 'https://devnet-as.magicblock.app', 'live rollup')
+  ]);
 })();
