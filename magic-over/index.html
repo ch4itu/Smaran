@@ -3543,8 +3543,8 @@ globalThis.SOScene = (() => {
   });
   boardTex.wrapS = THREE.RepeatWrapping;
   boardTex.repeat.set(-3, 1); // seen from inside the ring, so mirror it back; 3 strips of 2048 px keep the old text size
-  const boards = new THREE.Mesh(new THREE.CylinderGeometry(66, 66, 1.0, 120, 1, true), new THREE.MeshBasicMaterial({ map: boardTex, side: THREE.BackSide, toneMapped: false }));
-  boards.position.set(0, 0.5, PITCH / 2);
+  const boards = new THREE.Mesh(new THREE.CylinderGeometry(66, 66, 2.2, 120, 1, true), new THREE.MeshBasicMaterial({ map: boardTex, side: THREE.BackSide, toneMapped: false }));
+  boards.position.set(0, 1.1, PITCH / 2);
   scene.add(boards);
 
   const standProfile = [];
@@ -4722,7 +4722,7 @@ globalThis.SOScene = (() => {
 
   // ------------------------------------------------------------ cameras
   const CAM = {
-    broadcast: { pos: new THREE.Vector3(0.15, 9.5, PITCH + 46), look: new THREE.Vector3(0, 0.7, PITCH - 1.5) },
+    broadcast: { pos: new THREE.Vector3(0.15, 9.5, PITCH + 46), look: new THREE.Vector3(0, 2.25, PITCH - 1.5) },
     batterEnd: { pos: new THREE.Vector3(4, 7, -29), look: new THREE.Vector3(0, 1, 7) },
     sideOn: { pos: new THREE.Vector3(50, 13, 14), look: new THREE.Vector3(0, 1, 14) },
     wide: { pos: new THREE.Vector3(0, 32, PITCH + 58), look: new THREE.Vector3(0, 0, 6) },
@@ -4786,7 +4786,7 @@ globalThis.SOScene = (() => {
       return Math.max(16, THREE.MathUtils.radToDeg(fitPitch));
     }
     if (camMode === 'batterEnd') return portrait ? 24 : 18;
-    return portrait ? 16 : 12;
+    return portrait ? 17 : 14;
   }
   const matchDock = document.querySelector('#match .dock');
   function resize() {
