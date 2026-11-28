@@ -1191,7 +1191,19 @@ details p, details li { color: var(--muted); font-size: 14px; }
   .match-tools { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
   .camera-choice { display: flex; flex-direction: column; font: 16px/1 var(--px-body); color: var(--px-ink); }
   .camera-choice select { font: inherit; color: inherit; background: var(--px-paper); border: 2px solid var(--px-ink); padding: 3px; }
-  .dock { padding-top: 8px !important; gap: 6px !important; }
+  /* Reserve the same space throughout a delivery, including while the pads are hidden. */
+  .dock {
+    height: min(200px, 48vh);
+    height: min(calc(200px + env(safe-area-inset-bottom)), 48svh);
+    align-content: start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-top: 8px !important;
+    gap: 6px !important;
+  }
+  @media (max-height: 460px) and (orientation: landscape) {
+    .camera-choice { flex-direction: row; align-items: center; gap: 4px; }
+  }
   #matchStatus { font-family: var(--px-body) !important; font-size: 20px !important; line-height: 1.15 !important; padding: 4px 8px !important; }
   #batPad { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; gap: 6px !important; }
   #batPad button { padding: 10px 2px !important; font-size: 8px !important; min-height: 40px !important; }
