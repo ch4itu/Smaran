@@ -4604,7 +4604,7 @@ globalThis.SOScene = (() => {
 
   // ------------------------------------------------------------ cameras
   const CAM = {
-    broadcast: { pos: new THREE.Vector3(0.15, 9.5, PITCH + 46), look: new THREE.Vector3(0, 0.95, 1.6) },
+    broadcast: { pos: new THREE.Vector3(0.15, 9.5, PITCH + 46), look: new THREE.Vector3(0, 0.7, PITCH - 1.5) },
     wide: { pos: new THREE.Vector3(0, 32, PITCH + 58), look: new THREE.Vector3(0, 0, 6) },
   };
   let camMode = 'orbit', camFollow = null, followPos = null, cut = null, lastShotDir = new THREE.Vector2(0, 1);
@@ -4655,15 +4655,20 @@ globalThis.SOScene = (() => {
     const portrait = innerWidth / innerHeight < 0.8;
     if (camMode === 'orbit') return portrait ? 46 : 30;
     if (camFollow && performance.now() < camFollow && followPos) return portrait ? 46 : 30;
-    return portrait ? 16 : 8.5;
+    return portrait ? 16 : 12;
   }
+  const matchDock = document.querySelector('#match .dock');
   function resize() {
-    const w = innerWidth, h = innerHeight;
+    // Keep the whole run-up on the field above the shot or bowling controls.
+    const dockHeight = matchDock.offsetHeight;
+    const w = innerWidth, h = Math.max(1, innerHeight - dockHeight);
+    canvas.style.height = dockHeight ? h + 'px' : '100%';
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.fov = baseFov();
     camera.updateProjectionMatrix();
   }
+  new ResizeObserver(resize).observe(matchDock);
   addEventListener('resize', resize);
   resize();
   let last = performance.now(), prevY = null, prevVy = 0;

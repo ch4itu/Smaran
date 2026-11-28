@@ -13,8 +13,9 @@
   .sub span { color: var(--px-red); }
   p.lede { margin: 0 0 22px; }
   .menu { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
-  .menu a { display: block; text-decoration: none; color: var(--px-ink); background: var(--px-paper); border: 4px solid var(--px-ink); box-shadow: 4px 4px 0 var(--px-ink); padding: 12px 14px 12px 40px; position: relative; }
-  .menu a::before { content: "\25B6"; position: absolute; left: 14px; top: 13px; font-family: var(--px-head); font-size: 12px; color: var(--px-red); visibility: hidden; }
+  .menu a { display: grid; grid-template-columns: clamp(78px, 23vw, 144px) minmax(0, 1fr); align-items: center; gap: clamp(8px, 2vw, 16px); text-decoration: none; color: var(--px-ink); background: var(--px-paper); border: 4px solid var(--px-ink); box-shadow: 4px 4px 0 var(--px-ink); padding: 12px; position: relative; }
+  .menu img { display: block; width: 100%; height: auto; border: 1px solid var(--px-ink); }
+  .menu a::before { content: "\25B6"; position: absolute; left: 15px; top: 15px; font-family: var(--px-head); font-size: 12px; color: var(--px-red); visibility: hidden; }
   .menu a:hover, .menu a:focus-visible { background: var(--px-paper-2); outline: none; }
   .menu a:hover::before, .menu a:focus-visible::before { visibility: visible; }
   .menu a:active { transform: translate(4px, 4px); box-shadow: none; }
@@ -36,11 +37,11 @@
   <p class="lede"><b>Who pays?</b> You pay 0 SOL to use the featured apps on Devnet. Their accounts pay MagicBlock when a save to Solana incurs a fee. Our <a href="https://github.com/ch4itu/Smaran/tree/main/programs/save-fund">shared save fund</a> replenishes eligible accounts when someone runs a refill. Anyone can contribute Devnet SOL.</p>
   <p class="start px-blink">Pick an app</p>
   <ul class="menu">
-    <li><a href="magic-over/"><b>Magic Over</b><small>Cricket duels against the computer or a friend. One four or six earns a relic.</small></a></li>
-    <li><a href="eternalbliss/"><b>EternalBliss</b><small>An adventure game with quests, battles and shared worlds.</small></a></li>
-    <li><a href="smaranworld/"><b>SmaranWorld</b><small>A shared world to walk and chat in: 144 villages across fields, forests, hills, desert and tundra. Relic holders keep them.</small></a></li>
-    <li><a href="ludo-freeflow/"><b>Ludo Freeflow</b><small>Ludo with no turns: everyone moves at once. Online, a match starts 30 seconds after the second player joins, with 2 to 4 players. Fair dice and a leaderboard.</small></a></li>
-    <li><a href="streaks/"><b>Streaks</b><small>Not a game: keep a daily habit, one check-in a day.</small></a></li>
+    <li><a href="magic-over/"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/apps/magic-over.png"><img src="media/apps/magic-over.gif" alt="" width="160" height="100" loading="lazy"></picture><span><b>Magic Over</b><small>Cricket duels against the computer or a friend. One four or six earns a relic.</small></span></a></li>
+    <li><a href="eternalbliss/"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/apps/eternalbliss.png"><img src="media/apps/eternalbliss.gif" alt="" width="160" height="100" loading="lazy"></picture><span><b>EternalBliss</b><small>An adventure game with quests, battles and shared worlds.</small></span></a></li>
+    <li><a href="smaranworld/"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/apps/smaranworld.png"><img src="media/apps/smaranworld.gif" alt="" width="160" height="100" loading="lazy"></picture><span><b>SmaranWorld</b><small>A shared world to walk and chat in: 144 villages across fields, forests, hills, desert and tundra. Relic holders keep them.</small></span></a></li>
+    <li><a href="ludo-freeflow/"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/apps/ludo-freeflow.png"><img src="media/apps/ludo-freeflow.gif" alt="" width="160" height="100" loading="lazy"></picture><span><b>Ludo Freeflow</b><small>Ludo with no turns: everyone moves at once. Online, a match starts 30 seconds after the second player joins, with 2 to 4 players. Fair dice and a leaderboard.</small></span></a></li>
+    <li><a href="streaks/"><picture><source media="(prefers-reduced-motion: reduce)" srcset="media/apps/streaks.png"><img src="media/apps/streaks.gif" alt="" width="160" height="100" loading="lazy"></picture><span><b>Streaks</b><small>Not a game: keep a daily habit, one check-in a day.</small></span></a></li>
   </ul>
   <p class="how"><b>Our philosophy</b><br>You should be able to try an app before spending anything and keep using your account if its original website closes. Smaran’s sign-in page is open source. Once your encrypted signing key is saved to Solana, another host can serve the page and you can unlock the same account with your password. <a href="login/">How sign-in works</a>.</p>
   <footer>A demo on a test network (Solana Devnet). Relics are earned in play and can be gifted. The featured apps offer no marketplace or betting. For judges and developers: <a href="https://github.com/ch4itu/Smaran/blob/main/BLITZ.md">how it is built</a>.</footer>
