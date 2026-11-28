@@ -743,7 +743,76 @@ body,#stage{width:100%;height:100dvh}#stage{position:relative}#play-hud{max-widt
       };
     };
   }
-  function mountRelicPanels({ root, read, currentPlayer }) {
+  // The identity registry stores name hashes. Public game records supply candidate
+  // spellings; only a registry match can attach one to a finalized relic holder.
+  const verifiedHolderNames = new Map();
+  async function findHolderNames(owners, publish) {
+    const S = globalThis.SabhaSol, C = globalThis.SabhaChainKey, PK = C.solana.PublicKey;
+    const wanted = new Set(owners.filter(key => !verifiedHolderNames.has(key)));
+    if (!wanted.size) return;
+    const attempts = new Map();
+    function candidate(key, name) {
+      if (!wanted.has(key) || !/^[a-z0-9][a-z0-9_-]{2,31}$/.test(name)) return;
+      const id = key + ':' + name;
+      if (attempts.has(id)) return;
+      attempts.set(id, S.lookup(name, {erUrl:S.DEFAULT_ER, baseUrl:S.DEFAULT_BASE}).then(found => {
+        if (found.entry && S.b58encode(found.entry.owner) === key) {
+          verifiedHolderNames.set(key, name);
+          wanted.delete(key);
+          publish(key, name);
+        }
+      }).catch(() => {}));
+    }
+    const decoder = new TextDecoder();
+    function scan(account) {
+      if (!account?.data?.[0]) return;
+      const d = C.base64ToBytes(account.data[0]);
+      function row(at, nameAt, len) {
+        if (!len || len > 32 || nameAt + len > d.length) return;
+        candidate(S.b58encode(d.subarray(at, at + 32)), decoder.decode(d.subarray(nameAt, nameAt + len)));
+      }
+      switch (decoder.decode(d.subarray(0, 8))) {
+        case 'SOVER001':
+          row(16, 257, d[256]); row(48, 281, d[280]); break;
+        case 'MOBOARD1':
+          for (let i = 128; i + 72 <= d.length; i += 72) row(i, i + 33, d[i + 32]);
+          break;
+        case 'SMSTRK01':
+          for (let i = 64; i + 128 <= d.length; i += 128) if (d[i + 67] & 1) row(i, i + 33, d[i + 32]);
+          break;
+        case 'SMCITY01':
+          for (let i = 16; i + 96 <= d.length; i += 96) row(i, i + 43, d[i + 42]);
+          break;
+        case 'SMSIGN01':
+          for (let i = 16; i + 128 <= d.length; i += 128) row(i, i + 38, d[i + 37]);
+          break;
+        case 'EBBOOK01':
+          for (let i = 144; i + 112 <= d.length; i += 112) {
+            const field = d.subarray(i + 32, i + 64), end = field.indexOf(0);
+            row(i, i + 32, end < 0 ? 32 : end);
+          }
+          break;
+      }
+    }
+    function accounts(program, seed, count) {
+      const prefix = new TextEncoder().encode(seed), pk = new PK(program);
+      return Array.from({length:count}, (_, i) => PK.findProgramAddressSync([prefix, Uint8Array.of(i)], pk)[0].toBase58());
+    }
+    const city = 'HPEA1Ht9rBnqEQVdaEQ9QuqwiWAbY6fgCKs2ZPuQvcCW';
+    const publicKeys = [...accounts(city, 'city-room', 1), ...accounts(city, 'city-sign', 5),
+      ...accounts('A98As1brXWi2DuJFChgat6bL9XbmaRRiF5vMFZswALoi', 'smaran-streaks', 4),
+      ...accounts('6e5ied8gFYVSEoc6wWGwBwVSFAC9DZNYAgKg53M1rGdb', 'eb-book', 4)];
+    const cricket = ['AbHYLgyXTPC5bUoP1UdZmC8zAVbmddPKGCEjrk4MeJcC',
+      ...accounts('HwXp4A62RG3nBkmxTTaHbSi1wNj8vaVqZ6Kn5VkYBswT', 'so-table', 8)];
+    async function read(url, keys) {
+      const result = await S.rpc(url, 'getMultipleAccounts', [keys, {encoding:'base64', commitment:'confirmed'}], 6000);
+      for (const account of result.value) scan(account);
+    }
+    await Promise.allSettled([read(S.DEFAULT_ER, publicKeys), read('https://devnet-tee.magicblock.app', cricket),
+      read(S.DEFAULT_BASE, [...publicKeys, ...cricket])]);
+    await Promise.all(attempts.values());
+  }
+  function mountRelicPanels({ root, read, currentName, currentPlayer }) {
     const doc = root.ownerDocument;
     const make = (tag, text) => {
       const el = doc.createElement(tag);
@@ -778,11 +847,21 @@ body,#stage{width:100%;height:100dvh}#stage{position:relative}#play-hud{max-widt
           return;
         }
         const list2 = make("ol");
+        const labels = new Map();
         for (const row of data.rankings) {
-          const text = (row.owner === publicKey ? "You \xB7 " : "") + row.owner + " \xB7 " + row.points + " pts";
-          list2.append(make("li", text));
+          const mine = row.owner === publicKey;
+          const label = make("span", (mine && currentName?.()) || verifiedHolderNames.get(row.owner) ||
+            row.owner.slice(0, 4) + "…" + row.owner.slice(-4));
+          const item = make("li");
+          item.title = row.owner;
+          item.append(mine ? "You · " : "", label, " · " + row.points + " pts");
+          list2.append(item);
+          labels.set(row.owner, label);
         }
         body.append(list2);
+        void findHolderNames([...labels.keys()], (key, name) => {
+          labels.get(key).textContent = name;
+        }).catch(() => {});
         return;
       }
       const owned = data.relics.filter((relic) => relic.owner === publicKey);
@@ -3877,7 +3956,7 @@ function installCityIdentity({ engine, config, doc, global, toast }) {
   relic.textContent = "Villages";
   relic.onclick = () => { renderTowns(); townDialog.showModal(); };
   Promise.resolve(globalThis.smaranRelics).then(({createRelicReader, mountRelicPanels}) => {
-    collection = mountRelicPanels({root: panel, read: createRelicReader(config), currentPlayer: () => player?.publicKey});
+    collection = mountRelicPanels({root: panel, read: createRelicReader(config), currentName: () => player?.name, currentPlayer: () => player?.publicKey});
     const controls = panel.querySelector(".relic-controls");
     if (controls) bar.insertBefore(controls, account); // one row: Villages, My relics, Relic leaderboard, account
   }).catch(() => {});
