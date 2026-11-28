@@ -73,8 +73,9 @@
   #olBoard ol { margin: 4px 0 0; padding-left: 22px; }
   #olBoard li { margin: 2px 0; }
 </style>
+<script defer src="../public-totals.js"></script>
 </head><body><main>
-<h1>Ludo <span>Freeflow</span></h1><p>Four players. One board. Zero waiting.</p>
+<h1>Ludo <span>Freeflow</span></h1><p>Four players. One board. Zero waiting.</p><small hidden data-smaran-total="ludo-freeflow"></small>
 <div id="smaranBar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0"><button id="lfMenu" type="button" style="min-height:42px">Menu</button><button id="smaranSignIn" type="button" style="min-height:42px" title="Your username and password from any app with Smaran login">Sign in</button><span id="smaranStatus" role="status">Guest · local preview</span></div><div class="warn" id="modeNote"><b>LOCAL PREVIEW.</b> You are red, against three bots. Dice here come from your browser. In online matches every die is a fair random draw by MagicBlock (VRF), so nobody can fix a roll.</div>
 
 <section class="hud" role="status" aria-live="polite"><div><div class="hud-label" id="hudLabel">YOU · RED TEAM</div><div id="hint" class="hud-message">Roll the dice to begin</div></div><div id="dieFace" class="hud-die" aria-label="Latest dice roll"><span class="die-pips p5" id="diePips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div></section><canvas id="board" width="750" height="750" aria-label="Ludo board, tap a highlighted token to move"></canvas>

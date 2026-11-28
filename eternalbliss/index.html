@@ -7753,6 +7753,7 @@ body.eb-in-battle #eb-menu-open, body.eb-in-battle #eb-hero-open { visibility:hi
   .relic-controls button, .relic-dialog button { background-image: none !important; }
   .eb-joystick-ticks { display: none !important; } /* arrows removed from the joystick at the owner's request */
 </style>
+<script defer src="../public-totals.js"></script>
 </head>
 <body>
     <div class="game-container">
@@ -8153,7 +8154,7 @@ body.eb-in-battle #eb-menu-open, body.eb-in-battle #eb-hero-open { visibility:hi
                 <small id="eb-farlands-option-copy">A 10,000 × 10,000 solo realm with nine regions to explore.</small>
             </button>
         </div>
-        <div id="eb-menu-relics"></div>
+        <small hidden data-smaran-total="eternalbliss"></small><div id="eb-menu-relics"></div>
         <a class="eb-menu-home" href="../">All Smaran apps</a>
         <button type="button" id="eb-menu-music" aria-pressed="false">♪ Music off</button>
     </dialog>

@@ -56,6 +56,7 @@
   .picks .px-btn:disabled { opacity: .35; }
   #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: 92vw; padding: 10px 14px; background: var(--px-ink); color: var(--px-paper); border: 4px solid var(--px-ink); box-shadow: 4px 4px 0 var(--px-gold); }
 </style>
+<script defer src="../public-totals.js"></script>
 </head>
 <body class="px-page">
 <main>
@@ -92,7 +93,7 @@
     </ul>
   </section>
 
-  <footer><a href="../">All Smaran apps</a>. Program <a id="programLink" href="#" target="_blank" rel="noopener">A98As1…ALoi</a> on Solana Devnet, running on MagicBlock.</footer>
+  <small hidden data-smaran-total="streaks"></small><footer><a href="../">All Smaran apps</a>. Program <a id="programLink" href="#" target="_blank" rel="noopener">A98As1…ALoi</a> on Solana Devnet, running on MagicBlock.</footer>
 </main>
 
 <dialog id="signin" class="px-panel">
