@@ -41,7 +41,7 @@ The same login also signs players into [EternalBliss](eternalbliss/README.md), [
 
 **On another device**, the same name and passphrase are enough. The browser reads the locked copy from the rollup, or the last copy saved on Solana, unlocks it locally and checks that the key matches the registered public key.
 
-The passphrase never leaves the browser, there is no login server, and the unlocked key is kept only in memory. There is no passphrase reset: if the passphrase is lost, so is the player ID. A player who still knows the passphrase can change it on the [Smaran page](https://ch4itu.github.io/Smaran/login/); the player key stays the same.
+The sign-in page uses the passphrase locally to unlock the player key. The registry receives the encrypted copy. An app that embeds the login library directly handles the passphrase and unlocked key on its own page, so players need to trust that page. There is no passphrase reset: if the passphrase is lost, so is the player ID. A player who still knows the passphrase can change it on the [Smaran page](https://ch4itu.github.io/Smaran/login/); the player key stays the same.
 
 **Guests** can skip all of this. Games against the AI use a temporary key made in the browser.
 

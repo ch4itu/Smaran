@@ -155,7 +155,7 @@ Each app's README has its own "How MagicBlock is used" section.
 
 | Question | Answer |
 | --- | --- |
-| **Who pays?** | Never the people using the apps. Whoever runs the apps pays the chain costs, mostly once, as account deposits. All transaction fees (gas) are paid from a refillable corpus account, the save fund below, so people never need SOL. |
+| **Who pays?** | People using the featured Devnet apps pay 0 SOL. App accounts pay for saves to Solana. The Smaran Save Fund tops up eligible accounts when someone runs a refill. The person running it pays the refill transaction fees and delegation deposit. |
 | **How is that covered?** | Non-intrusive ads only: a sponsor's name on a stadium board or a village sign, never anything that interrupts play. There are no ads in this demo, and the plan is not proven yet. |
 | **Can others help?** | Yes. Anyone can send SOL to the [save fund](programs/save-fund), `9NLZkhdU3vG1kDi2RBW29pRyLcVW9MHSANWKMdE61myj`. It can only top up these apps' accounts when they run low, at most 0.1 SOL a day, and has no withdraw. It is a gift, not an investment: nothing comes back. |
 | **What if we stop?** | There is no server to switch off. The pages are static and open source, so anyone can host them. Logins and relics are on Solana, so people can still sign in and keep what they earned. |
