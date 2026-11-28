@@ -1109,6 +1109,9 @@ details p, details li { color: var(--muted); font-size: 14px; }
   #home summary { font-size: 8px !important; }
   .homeFoot { margin-top: 6px !important; }
   .homeFoot .badge { font-size: 7px !important; }
+  .match-tools { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
+  .camera-choice { display: flex; flex-direction: column; font: 16px/1 var(--px-body); color: var(--px-ink); }
+  .camera-choice select { font: inherit; color: inherit; background: var(--px-paper); border: 2px solid var(--px-ink); padding: 3px; }
   .dock { padding-top: 8px !important; gap: 6px !important; }
   #matchStatus { font-family: var(--px-body) !important; font-size: 20px !important; line-height: 1.15 !important; padding: 4px 8px !important; }
   #batPad { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; gap: 6px !important; }
@@ -1239,7 +1242,16 @@ details p, details li { color: var(--muted); font-size: 14px; }
   <div class="corner"><span id="ping" class="ping"></span><span id="matchCode">vs AI</span><button id="copyCode" type="button" aria-label="Copy match code">Copy</button><button id="btnSound" type="button" aria-pressed="true" aria-label="Sound">Sound</button><button id="btnConcede" type="button">Leave</button></div>
   <div class="banner" id="banner" aria-live="polite"><div class="big"></div><div class="small"></div><div class="reveal"></div></div>
   <div class="dock">
-    <div id="matchStatus" role="status"></div>
+    <div class="match-tools">
+      <div id="matchStatus" role="status"></div>
+      <label class="camera-choice">Camera
+        <select id="matchCamera">
+          <option value="broadcast">Broadcast</option>
+          <option value="batterEnd">Batter’s end</option>
+          <option value="sideOn">Side-on</option>
+        </select>
+      </label>
+    </div>
     <div id="batPad" hidden>
       <div id="battingGuide" hidden>
         <p hidden>Tap Swing as the bar fills. A slower ball arrives later.</p>
@@ -4605,11 +4617,18 @@ globalThis.SOScene = (() => {
   // ------------------------------------------------------------ cameras
   const CAM = {
     broadcast: { pos: new THREE.Vector3(0.15, 9.5, PITCH + 46), look: new THREE.Vector3(0, 0.7, PITCH - 1.5) },
+    batterEnd: { pos: new THREE.Vector3(4, 7, -29), look: new THREE.Vector3(0, 1, 7) },
+    sideOn: { pos: new THREE.Vector3(50, 13, 14), look: new THREE.Vector3(0, 1, 14) },
     wide: { pos: new THREE.Vector3(0, 32, PITCH + 58), look: new THREE.Vector3(0, 0, 6) },
   };
   let camMode = 'orbit', camFollow = null, followPos = null, cut = null, lastShotDir = new THREE.Vector2(0, 1);
   const camLook = new THREE.Vector3();
-  function setCamera(mode) { camMode = mode; camFollow = null; followPos = null; cut = null; }
+  function setCamera(mode, immediate = false) {
+    camMode = mode;
+    camFollow = null;
+    followPos = null;
+    cut = immediate ? 'out' : null;
+  }
   // big hits cut to a high camera behind the batter that tracks the ball, then cut back (like a TV replay angle)
   function followBall(ms) {
     camFollow = performance.now() + ms;
@@ -4655,6 +4674,12 @@ globalThis.SOScene = (() => {
     const portrait = innerWidth / innerHeight < 0.8;
     if (camMode === 'orbit') return portrait ? 46 : 30;
     if (camFollow && performance.now() < camFollow && followPos) return portrait ? 46 : 30;
+    if (camMode === 'sideOn') {
+      // Keep both creases and the run-up in frame even on narrow screens.
+      const fitPitch = 2 * Math.atan(19 / (50 * camera.aspect));
+      return Math.max(16, THREE.MathUtils.radToDeg(fitPitch));
+    }
+    if (camMode === 'batterEnd') return portrait ? 24 : 18;
     return portrait ? 16 : 12;
   }
   const matchDock = document.querySelector('#match .dock');
@@ -4838,10 +4863,19 @@ globalThis.SOCompetition = (() => {
   const VAR_REVEAL = [['', 'It turned in (off-break)', 'It turned away (leg-break)', 'It was flighted and slower'], ['', 'It swung in', 'It swung away', 'It was a slower ball'], ['', 'It swung in', 'It swung away', 'It was a slower ball']];
 
   // ------------------------------------------------------------ small UI helpers
+  const matchCamera = $('matchCamera');
+  try {
+    const saved = localStorage.getItem('so-match-camera');
+    if (Array.from(matchCamera.options).some(option => option.value === saved)) matchCamera.value = saved;
+  } catch {}
+  matchCamera.addEventListener('change', () => {
+    V.setCamera(matchCamera.value, true);
+    try { localStorage.setItem('so-match-camera', matchCamera.value); } catch {}
+  });
   function show(id) {
     if (id !== 'leaderboard') stopLeaderboardRefresh();
     for (const el of document.querySelectorAll('.screen')) el.hidden = el.id !== id;
-    if (id) V.setCamera(id === 'match' ? 'broadcast' : 'orbit');
+    if (id) V.setCamera(id === 'match' ? matchCamera.value : 'orbit');
   }
   let toastTimer = 0;
   function toast(text, kind = '') {
@@ -5434,7 +5468,7 @@ function createBattingGuide(root, playShot) {
   }
   for (const b of document.querySelectorAll('#batPad [data-shot]')) b.onpointerdown = ev => { ev.preventDefault(); playShot(Number(b.dataset.shot)); };
   addEventListener('keydown', ev => {
-    if ($('match').hidden || ev.target.tagName === 'INPUT') return;
+    if ($('match').hidden || ev.target.matches('input, select')) return;
     const map = { ArrowDown: 0, KeyS: 0, Space: 1, KeyW: 1, ArrowLeft: 2, KeyA: 2, ArrowRight: 3, KeyD: 3, ArrowUp: 4, KeyE: 4, KeyL: 5, Escape: 5, Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4, Digit6: 5 };
     if (ev.code in map) { ev.preventDefault(); playShot(map[ev.code]); }
   });
@@ -5500,7 +5534,7 @@ function createBattingGuide(root, playShot) {
       reveal();
       if (session.holdBoard) { session.holdBoard = false; const latest = session.latest || s; session.scoreKey = scoreKeyOf(latest); renderScore(latest); }
       banner.className = 'banner';
-      V.setBallDriver(null); V.resetStumps(); V.resetBat(); V.resetBowler(); V.setCamera('broadcast');
+      V.setBallDriver(null); V.resetStumps(); V.resetBat(); V.resetBowler(); V.setCamera(matchCamera.value);
     }, hold);
   }
 
